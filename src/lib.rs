@@ -19,11 +19,13 @@ use crate::storage::deserialize_witnesscalc_graph;
 pub type InputSignalsInfo = HashMap<String, (usize, usize)>;
 
 pub mod proto {
-    include!(concat!(env!("OUT_DIR"), "/circom_witnesscalc.proto.rs"));
+    // include!(concat!(env!("OUT_DIR"), "/circom_witnesscalc.proto.rs"));
+
+    include!("circom_witnesscalc.proto.rs");
 }
 
-include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
-// include!("bindings.rs");
+// include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+include!("bindings.rs");
 
 fn prepare_status(status: *mut gw_status_t, code: GW_ERROR_CODE, error_msg: &str) {
     if !status.is_null() {
