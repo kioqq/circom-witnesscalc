@@ -1,22 +1,32 @@
+use circom_witnesscalc::graph::{
+    optimize, Node, NodeConstErr, NodeIdx, Nodes, Operation, TresOperation, UnoOperation,
+};
+use circom_witnesscalc::storage::serialize_witnesscalc_graph;
+use circom_witnesscalc::{deserialize_inputs, InputSignalsInfo};
+use code_producers::c_elements::IODef;
+use code_producers::components::TemplateInstanceIOMap;
+use compiler::circuit_design::function::FunctionCode;
 use compiler::circuit_design::template::TemplateCode;
 use compiler::compiler_interface::{run_compiler, Circuit, Config};
+<<<<<<< HEAD
 use compiler::intermediate_representation::ir_interface::{AddressType, CallBucket, ComputeBucket, CreateCmpBucket, FinalData, InputInformation, Instruction, InstructionPointer, LoadBucket, LocationRule, ObtainMeta, OperatorType, ReturnBucket, ReturnType, StatusInput, StoreBucket, ValueBucket, ValueType};
+=======
+use compiler::intermediate_representation::ir_interface::{
+    AddressType, CallBucket, ComputeBucket, CreateCmpBucket, FinalData, InputInformation,
+    Instruction, InstructionPointer, LoadBucket, LocationRule, OperatorType, ReturnBucket,
+    ReturnType, StatusInput, StoreBucket, ValueBucket, ValueType,
+};
+>>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
 use constraint_generation::{build_circuit, BuildConfig};
+use lazy_static::lazy_static;
 use program_structure::error_definition::Report;
 use ruint::aliases::U256;
 use ruint::uint;
 use std::collections::HashMap;
-use std::{env, fmt, fs};
 use std::error::Error;
 use std::path::PathBuf;
-use code_producers::c_elements::IODef;
-use code_producers::components::TemplateInstanceIOMap;
-use compiler::circuit_design::function::FunctionCode;
-use lazy_static::lazy_static;
+use std::{env, fmt, fs};
 use type_analysis::check_types::check_types;
-use circom_witnesscalc::{deserialize_inputs, InputSignalsInfo};
-use circom_witnesscalc::graph::{optimize, Node, Operation, UnoOperation, TresOperation, Nodes, NodeConstErr, NodeIdx};
-use circom_witnesscalc::storage::serialize_witnesscalc_graph;
 
 pub const M: U256 =
     uint!(21888242871839275222246405745257275088548364400416034343698204186575808495617_U256);
@@ -38,7 +48,10 @@ fn try_signal_store<'a>(
         Instruction::Store(ref store_bucket) => store_bucket,
         _ => return None,
     };
-    if let AddressType::Signal = store_bucket.dest_address_type {} else { return None; };
+    if let AddressType::Signal = store_bucket.dest_address_type {
+    } else {
+        return None;
+    };
     match &store_bucket.dest {
         LocationRule::Indexed {
             location,
@@ -47,12 +60,18 @@ fn try_signal_store<'a>(
             if template_header.is_some() {
                 panic!("not implemented: template_header expected to be None");
             }
-            let signal_idx =
-                calc_expression(
-                    location, nodes, vars, component_signal_start,
-                    signal_node_idx, subcomponents, io_map, print_debug,
-                    call_stack)
-                .must_const_usize(nodes, call_stack);
+            let signal_idx = calc_expression(
+                location,
+                nodes,
+                vars,
+                component_signal_start,
+                signal_node_idx,
+                subcomponents,
+                io_map,
+                print_debug,
+                call_stack,
+            )
+            .must_const_usize(nodes, call_stack);
 
             let signal_idx = component_signal_start + signal_idx;
             Some((signal_idx, &store_bucket.src))
@@ -64,9 +83,11 @@ fn try_signal_store<'a>(
 }
 
 fn var_from_value_instruction_n(
-    value_bucket: &ValueBucket, nodes: &Nodes, n: usize,
-    call_stack: &Vec<String>) -> Vec<Var> {
-
+    value_bucket: &ValueBucket,
+    nodes: &Nodes,
+    n: usize,
+    call_stack: &Vec<String>,
+) -> Vec<Var> {
     match value_bucket.parse_as {
         ValueType::BigInt => {
             let mut result = Vec::with_capacity(n);
@@ -74,21 +95,27 @@ fn var_from_value_instruction_n(
             for i in 0..n {
                 assert!(
                     matches!(
-                        nodes.get(NodeIdx(value_bucket.value+i)),
-                        Some(Node::Constant(..))),
+                        nodes.get(NodeIdx(value_bucket.value + i)),
+                        Some(Node::Constant(..))
+                    ),
                     "node #{} expected to be a constant, but it is not; {}",
-                    value_bucket.value+i, call_stack.join(" -> "));
-                result.push(Var::Node(value_bucket.value+i));
-            };
+                    value_bucket.value + i,
+                    call_stack.join(" -> ")
+                );
+                result.push(Var::Node(value_bucket.value + i));
+            }
 
             result
-        },
+        }
         ValueType::U32 => {
-            assert_eq!(n, 1,
+            assert_eq!(
+                n,
+                1,
                 "for ValueType::U32 number of values is expected to be 1; {}",
-                call_stack.join(" -> "));
+                call_stack.join(" -> ")
+            );
             vec![Var::Value(U256::from(value_bucket.value))]
-        },
+        }
     }
 }
 
@@ -110,51 +137,126 @@ fn operator_argument_instruction_n(
         // operator_argument_instruction implements much more cases than
         // this function, so we can use it here is size == 1
         return vec![operator_argument_instruction(
-            inst, nodes, signal_node_idx, vars,
-            component_signal_start, subcomponents, io_map, print_debug,
-            call_stack)];
+            inst,
+            nodes,
+            signal_node_idx,
+            vars,
+            component_signal_start,
+            subcomponents,
+            io_map,
+            print_debug,
+            call_stack,
+        )];
     }
 
     match **inst {
-        Instruction::Load(ref load_bucket) => {
-            match load_bucket.address_type {
-                AddressType::Signal => match &load_bucket.src {
-                    LocationRule::Indexed {
+        Instruction::Load(ref load_bucket) => match load_bucket.address_type {
+            AddressType::Signal => match &load_bucket.src {
+                LocationRule::Indexed {
+                    location,
+                    template_header,
+                } => {
+                    if template_header.is_some() {
+                        panic!("not implemented: template_header expected to be None");
+                    }
+                    let signal_idx = calc_expression(
                         location,
-                        template_header,
-                    } => {
-                        if template_header.is_some() {
-                            panic!("not implemented: template_header expected to be None");
-                        }
-                        let signal_idx =
-                            calc_expression(
-                                location, nodes, vars, component_signal_start,
-                                signal_node_idx, subcomponents, io_map,
-                                print_debug, call_stack)
-                            .must_const_usize(nodes, call_stack);
-                        let mut result = Vec::with_capacity(size);
-                        for i in 0..size {
-                            let signal_node = signal_node_idx[component_signal_start + signal_idx + i];
-                            assert_ne!(
-                                signal_node, usize::MAX,
-                                "signal {}/{}/{} is not set yet",
-                                component_signal_start, signal_idx, i);
-                            result.push(signal_node);
-                        }
-                        return result;
+                        nodes,
+                        vars,
+                        component_signal_start,
+                        signal_node_idx,
+                        subcomponents,
+                        io_map,
+                        print_debug,
+                        call_stack,
+                    )
+                    .must_const_usize(nodes, call_stack);
+                    let mut result = Vec::with_capacity(size);
+                    for i in 0..size {
+                        let signal_node = signal_node_idx[component_signal_start + signal_idx + i];
+                        assert_ne!(
+                            signal_node,
+                            usize::MAX,
+                            "signal {}/{}/{} is not set yet",
+                            component_signal_start,
+                            signal_idx,
+                            i
+                        );
+                        result.push(signal_node);
                     }
-                    LocationRule::Mapped { .. } => {
-                        todo!()
-                    }
-                },
-                AddressType::SubcmpSignal { ref cmp_address, .. } => {
-                    let subcomponent_idx =
-                        calc_expression(
-                            cmp_address, nodes, vars, component_signal_start,
-                            signal_node_idx, subcomponents, io_map, print_debug,
-                            call_stack)
-                        .must_const_usize(nodes, call_stack);
+                    return result;
+                }
+                LocationRule::Mapped { .. } => {
+                    todo!()
+                }
+            },
+            AddressType::SubcmpSignal {
+                ref cmp_address, ..
+            } => {
+                let subcomponent_idx = calc_expression(
+                    cmp_address,
+                    nodes,
+                    vars,
+                    component_signal_start,
+                    signal_node_idx,
+                    subcomponents,
+                    io_map,
+                    print_debug,
+                    call_stack,
+                )
+                .must_const_usize(nodes, call_stack);
 
+                let (signal_idx, template_header) = match load_bucket.src {
+                    LocationRule::Indexed {
+                        ref location,
+                        ref template_header,
+                    } => {
+                        let signal_idx = calc_expression(
+                            location,
+                            nodes,
+                            vars,
+                            component_signal_start,
+                            signal_node_idx,
+                            subcomponents,
+                            io_map,
+                            print_debug,
+                            call_stack,
+                        );
+                        let signal_idx = signal_idx.to_const_usize(nodes).unwrap_or_else(|e| {
+                            panic!(
+                                "can't calculate const usize signal index: {}: {}",
+                                e,
+                                call_stack.join(" -> ")
+                            )
+                        });
+                        (
+                            signal_idx,
+                            template_header.as_ref().unwrap_or(&"-".to_string()).clone(),
+                        )
+                    }
+                    LocationRule::Mapped {
+                        ref signal_code,
+                        ref indexes,
+                    } => calc_mapped_signal_idx(
+                        subcomponents,
+                        subcomponent_idx,
+                        io_map,
+                        signal_code.clone(),
+                        indexes,
+                        nodes,
+                        vars,
+                        component_signal_start,
+                        signal_node_idx,
+                        print_debug,
+                        call_stack,
+                    ),
+                };
+                let signal_offset = subcomponents[subcomponent_idx]
+                    .as_ref()
+                    .unwrap()
+                    .signal_offset;
+
+<<<<<<< HEAD
                     let (signal_idx, template_header) = match load_bucket.src {
                         LocationRule::Indexed {
                             ref location,
@@ -178,43 +280,72 @@ fn operator_argument_instruction_n(
                                 component_signal_start, signal_node_idx,
                                 print_debug, call_stack)
                         }
+=======
+                if print_debug {
+                    let location_rule = match load_bucket.src {
+                        LocationRule::Indexed { .. } => "Indexed",
+                        LocationRule::Mapped { .. } => "Mapped",
+>>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
                     };
-                    let signal_offset = subcomponents[subcomponent_idx]
-                        .as_ref()
-                        .unwrap()
-                        .signal_offset;
-
-                    if print_debug {
-                        let location_rule = match load_bucket.src {
-                            LocationRule::Indexed { .. } => "Indexed",
-                            LocationRule::Mapped { .. } => "Mapped",
-                        };
-                        println!(
+                    println!(
                             "Load subcomponent signal (location: {}, template: {}, subcomponent idx: {}, size: {}): {} + {} = {}",
                             location_rule, template_header, subcomponent_idx, size,
                             signal_offset, signal_idx, signal_offset + signal_idx);
-                    }
-
-                    let signal_idx = signal_offset + signal_idx;
-
-                    let mut result = Vec::with_capacity(size);
-                    for i in 0..size {
-                        let signal_node = signal_node_idx[signal_idx + i];
-                        assert_ne!(
-                            signal_node, usize::MAX,
-                            "signal {}/{}/{} is not set yet",
-                            component_signal_start, signal_idx, i);
-                        result.push(signal_node);
-                    }
-                    result
                 }
-                AddressType::Variable => {
-                    let location = match load_bucket.src {
-                        LocationRule::Indexed { ref location, .. } => location,
-                        LocationRule::Mapped { .. } => {
-                            panic!("mapped signals are supported on for subcmp signals");
+
+                let signal_idx = signal_offset + signal_idx;
+
+                let mut result = Vec::with_capacity(size);
+                for i in 0..size {
+                    let signal_node = signal_node_idx[signal_idx + i];
+                    assert_ne!(
+                        signal_node,
+                        usize::MAX,
+                        "signal {}/{}/{} is not set yet",
+                        component_signal_start,
+                        signal_idx,
+                        i
+                    );
+                    result.push(signal_node);
+                }
+                result
+            }
+            AddressType::Variable => {
+                let location = match load_bucket.src {
+                    LocationRule::Indexed { ref location, .. } => location,
+                    LocationRule::Mapped { .. } => {
+                        panic!("mapped signals are supported on for subcmp signals");
+                    }
+                };
+                let var_idx = calc_expression(
+                    location,
+                    nodes,
+                    vars,
+                    component_signal_start,
+                    signal_node_idx,
+                    subcomponents,
+                    io_map,
+                    print_debug,
+                    call_stack,
+                )
+                .must_const_usize(nodes, call_stack);
+                let mut result = Vec::with_capacity(size);
+                for i in 0..size {
+                    match vars[var_idx + i] {
+                        Some(Var::Node(idx)) => {
+                            result.push(idx);
+                        }
+                        Some(Var::Value(ref v)) => {
+                            result.push(nodes.push(Node::Constant(v.clone())).0);
+                        }
+                        None => {
+                            panic!(
+                                "variable is not set: {}, {:?}",
+                                load_bucket.line, call_stack
+                            );
                         }
                     };
+<<<<<<< HEAD
                     let var_idx =
                         calc_expression(
                             location, nodes, vars, component_signal_start,
@@ -235,15 +366,20 @@ fn operator_argument_instruction_n(
                         };
                     }
                     result
+=======
+>>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
                 }
+                result
             }
-        }
+        },
         _ => {
-            panic!("multi-operator is not implemented for instruction: {}", inst.to_string());
+            panic!(
+                "multi-operator is not implemented for instruction: {}",
+                inst.to_string()
+            );
         }
     }
 }
-
 
 fn operator_argument_instruction(
     inst: &InstructionPointer,
@@ -257,34 +393,13 @@ fn operator_argument_instruction(
     call_stack: &Vec<String>,
 ) -> usize {
     match **inst {
-        Instruction::Load(ref load_bucket) => {
-            match load_bucket.address_type {
-                AddressType::Signal => match &load_bucket.src {
-                    LocationRule::Indexed {
-                        location,
-                        template_header,
-                    } => {
-                        if template_header.is_some() {
-                            panic!("not implemented: template_header expected to be None");
-                        }
-                        let signal_idx =
-                            calc_expression(
-                                location, nodes, vars, component_signal_start,
-                                signal_node_idx, subcomponents, io_map,
-                                print_debug, call_stack)
-                            .must_const_usize(nodes, call_stack);
-                        let signal_idx = component_signal_start + signal_idx;
-                        let signal_node = signal_node_idx[signal_idx];
-                        assert_ne!(signal_node, usize::MAX, "signal is not set yet");
-                        return signal_node;
-                    }
-                    LocationRule::Mapped { .. } => {
-                        todo!()
-                    }
-                },
-                AddressType::SubcmpSignal {
-                    ref cmp_address, ..
+        Instruction::Load(ref load_bucket) => match load_bucket.address_type {
+            AddressType::Signal => match &load_bucket.src {
+                LocationRule::Indexed {
+                    location,
+                    template_header,
                 } => {
+<<<<<<< HEAD
                     let subcomponent_idx =
                         calc_expression(
                             cmp_address, nodes, vars, component_signal_start,
@@ -324,13 +439,29 @@ fn operator_argument_instruction(
                             "Load subcomponent signal: ({}) [{}] {} + {} = {}",
                             template_header, subcomponent_idx, signal_offset,
                             signal_idx, signal_offset + signal_idx);
+=======
+                    if template_header.is_some() {
+                        panic!("not implemented: template_header expected to be None");
+>>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
                     }
-
-                    let signal_idx = signal_offset + signal_idx;
+                    let signal_idx = calc_expression(
+                        location,
+                        nodes,
+                        vars,
+                        component_signal_start,
+                        signal_node_idx,
+                        subcomponents,
+                        io_map,
+                        print_debug,
+                        call_stack,
+                    )
+                    .must_const_usize(nodes, call_stack);
+                    let signal_idx = component_signal_start + signal_idx;
                     let signal_node = signal_node_idx[signal_idx];
                     assert_ne!(signal_node, usize::MAX, "signal is not set yet");
                     return signal_node;
                 }
+<<<<<<< HEAD
                 AddressType::Variable => {
                     match load_bucket.src {
                         LocationRule::Indexed { ref location, .. } => {
@@ -351,24 +482,134 @@ fn operator_argument_instruction(
                         }
                         LocationRule::Mapped { .. } => {
                             todo!()
+=======
+                LocationRule::Mapped { .. } => {
+                    todo!()
+                }
+            },
+            AddressType::SubcmpSignal {
+                ref cmp_address, ..
+            } => {
+                let subcomponent_idx = calc_expression(
+                    cmp_address,
+                    nodes,
+                    vars,
+                    component_signal_start,
+                    signal_node_idx,
+                    subcomponents,
+                    io_map,
+                    print_debug,
+                    call_stack,
+                )
+                .must_const_usize(nodes, call_stack);
+
+                let (signal_idx, template_header) = match load_bucket.src {
+                    LocationRule::Indexed {
+                        ref location,
+                        ref template_header,
+                    } => {
+                        let signal_idx = calc_expression(
+                            location,
+                            nodes,
+                            vars,
+                            component_signal_start,
+                            signal_node_idx,
+                            subcomponents,
+                            io_map,
+                            print_debug,
+                            call_stack,
+                        )
+                        .must_const_usize(nodes, call_stack);
+                        (
+                            signal_idx,
+                            template_header.as_ref().unwrap_or(&"-".to_string()).clone(),
+                        )
+                    }
+                    LocationRule::Mapped {
+                        ref signal_code,
+                        ref indexes,
+                    } => calc_mapped_signal_idx(
+                        subcomponents,
+                        subcomponent_idx,
+                        io_map,
+                        signal_code.clone(),
+                        indexes,
+                        nodes,
+                        vars,
+                        component_signal_start,
+                        signal_node_idx,
+                        print_debug,
+                        call_stack,
+                    ),
+                };
+
+                let signal_offset = subcomponents[subcomponent_idx]
+                    .as_ref()
+                    .unwrap()
+                    .signal_offset;
+
+                if print_debug {
+                    println!(
+                        "Load subcomponent signal: ({}) [{}] {} + {} = {}",
+                        template_header,
+                        subcomponent_idx,
+                        signal_offset,
+                        signal_idx,
+                        signal_offset + signal_idx
+                    );
+                }
+
+                let signal_idx = signal_offset + signal_idx;
+                let signal_node = signal_node_idx[signal_idx];
+                assert_ne!(signal_node, usize::MAX, "signal is not set yet");
+                return signal_node;
+            }
+            AddressType::Variable => match load_bucket.src {
+                LocationRule::Indexed { ref location, .. } => {
+                    let var_idx = calc_expression(
+                        location,
+                        nodes,
+                        vars,
+                        component_signal_start,
+                        signal_node_idx,
+                        subcomponents,
+                        io_map,
+                        print_debug,
+                        call_stack,
+                    )
+                    .must_const_usize(nodes, call_stack);
+                    match vars[var_idx] {
+                        Some(Var::Node(idx)) => idx,
+                        Some(Var::Value(ref v)) => nodes.push(Node::Constant(v.clone())).0,
+                        None => {
+                            panic!("variable is not set");
+>>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
                         }
                     }
                 }
-            }
-        }
+                LocationRule::Mapped { .. } => {
+                    todo!()
+                }
+            },
+        },
         Instruction::Compute(ref compute_bucket) => {
             let node = node_from_compute_bucket(
-                compute_bucket, nodes, signal_node_idx, vars,
-                component_signal_start, subcomponents, io_map, print_debug,
-                call_stack);
+                compute_bucket,
+                nodes,
+                signal_node_idx,
+                vars,
+                component_signal_start,
+                subcomponents,
+                io_map,
+                print_debug,
+                call_stack,
+            );
             nodes.push(node).0
         }
         Instruction::Value(ref value_bucket) => {
             match value_bucket.parse_as {
                 ValueType::BigInt => match nodes.get(NodeIdx(value_bucket.value)) {
-                    Some(Node::Constant(..)) => {
-                        value_bucket.value
-                    }
+                    Some(Node::Constant(..)) => value_bucket.value,
                     _ => {
                         panic!("there is expected to be constant node");
                     }
@@ -433,10 +674,18 @@ fn node_from_compute_bucket(
 ) -> Node {
     if let Some(op) = DUO_OPERATORS_MAP.get(&compute_bucket.op) {
         let arg1 = operator_argument_instruction(
-            &compute_bucket.stack[0], nodes, signal_node_idx, vars,
-            component_signal_start, subcomponents, io_map, print_debug,
-            call_stack);
+            &compute_bucket.stack[0],
+            nodes,
+            signal_node_idx,
+            vars,
+            component_signal_start,
+            subcomponents,
+            io_map,
+            print_debug,
+            call_stack,
+        );
         let arg2 = operator_argument_instruction(
+<<<<<<< HEAD
             &compute_bucket.stack[1], nodes, signal_node_idx, vars,
             component_signal_start, subcomponents, io_map, print_debug,
             call_stack);
@@ -448,20 +697,53 @@ fn node_from_compute_bucket(
             component_signal_start, subcomponents, io_map, print_debug,
             call_stack);
         return Node::UnoOp(*op, arg1);
+=======
+            &compute_bucket.stack[1],
+            nodes,
+            signal_node_idx,
+            vars,
+            component_signal_start,
+            subcomponents,
+            io_map,
+            print_debug,
+            call_stack,
+        );
+        return Node::Op(op.clone(), arg1, arg2);
+    }
+    if let Some(op) = UNO_OPERATORS_MAP.get(&compute_bucket.op) {
+        let arg1 = operator_argument_instruction(
+            &compute_bucket.stack[0],
+            nodes,
+            signal_node_idx,
+            vars,
+            component_signal_start,
+            subcomponents,
+            io_map,
+            print_debug,
+            call_stack,
+        );
+        return Node::UnoOp(op.clone(), arg1);
+>>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
     }
     panic!(
         "not implemented: this operator is not supported to be converted to Node: {}",
-        compute_bucket.to_string());
+        compute_bucket.to_string()
+    );
 }
 
 fn calc_mapped_signal_idx(
     subcomponents: &Vec<Option<ComponentInstance>>,
-    subcomponent_idx: usize, io_map: &TemplateInstanceIOMap, signal_code: usize,
-    indexes: &Vec<InstructionPointer>, nodes: &mut Nodes,
-    vars: &mut Vec<Option<Var>>, component_signal_start: usize,
-    signal_node_idx: &mut Vec<usize>, print_debug: bool,
-    call_stack: &Vec<String>) -> (usize, String) {
-
+    subcomponent_idx: usize,
+    io_map: &TemplateInstanceIOMap,
+    signal_code: usize,
+    indexes: &Vec<InstructionPointer>,
+    nodes: &mut Nodes,
+    vars: &mut Vec<Option<Var>>,
+    component_signal_start: usize,
+    signal_node_idx: &mut Vec<usize>,
+    print_debug: bool,
+    call_stack: &Vec<String>,
+) -> (usize, String) {
     let template_id = &subcomponents[subcomponent_idx]
         .as_ref()
         .unwrap()
@@ -489,8 +771,16 @@ fn calc_mapped_signal_idx(
         // Calculate linear index
         for (i, idx_ip) in indexes.iter().enumerate() {
             let idx_value = calc_expression(
-                idx_ip, nodes, vars, component_signal_start, signal_node_idx,
-                subcomponents, io_map, print_debug, call_stack);
+                idx_ip,
+                nodes,
+                vars,
+                component_signal_start,
+                signal_node_idx,
+                subcomponents,
+                io_map,
+                print_debug,
+                call_stack,
+            );
             let idx_value = idx_value.must_const_usize(nodes, call_stack);
 
             // Ensure index is within bounds
@@ -539,27 +829,63 @@ fn process_instruction(
                             if template_header.is_some() {
                                 panic!("not implemented: template_header expected to be None");
                             }
+<<<<<<< HEAD
                             let signal_idx =
                                 calc_expression(
                                     location, nodes, vars, cmp.signal_offset,
                                     signal_node_idx, subcomponents, io_map,
                                     print_debug, call_stack)
                                 .must_const_usize(nodes, call_stack);
+=======
+                            let signal_idx = calc_expression(
+                                location,
+                                nodes,
+                                vars,
+                                component_signal_start,
+                                signal_node_idx,
+                                subcomponents,
+                                io_map,
+                                print_debug,
+                                call_stack,
+                            )
+                            .must_const_usize(nodes, call_stack);
+>>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
 
                             if print_debug {
                                 println!(
                                     "Store signal at offset {} + {} = {}",
+<<<<<<< HEAD
                                     cmp.signal_offset, signal_idx,
                                     cmp.signal_offset + signal_idx);
+=======
+                                    component_signal_start,
+                                    signal_idx,
+                                    component_signal_start + signal_idx
+                                );
+>>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
                             }
                             let signal_idx =
                                 cmp.signal_offset + signal_idx;
 
                             let node_idxs = operator_argument_instruction_n(
+<<<<<<< HEAD
                                 &store_bucket.src, nodes, signal_node_idx, vars,
                                 cmp.signal_offset, subcomponents,
                                 store_bucket.context.size, io_map, print_debug,
                                 call_stack);
+=======
+                                &store_bucket.src,
+                                nodes,
+                                signal_node_idx,
+                                vars,
+                                component_signal_start,
+                                subcomponents,
+                                store_bucket.context.size,
+                                io_map,
+                                print_debug,
+                                call_stack,
+                            );
+>>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
 
                             assert_eq!(node_idxs.len(), store_bucket.context.size);
 
@@ -583,6 +909,7 @@ fn process_instruction(
                         }
                     }
                 }
+<<<<<<< HEAD
                 AddressType::Variable => {
                     match &store_bucket.dest {
                         LocationRule::Indexed {
@@ -606,18 +933,55 @@ fn process_instruction(
                             for i in 0..store_bucket.context.size {
                                 vars[lvar_idx + i] = Some(var_exprs[i].clone());
                             }
+=======
+                AddressType::Variable => match &store_bucket.dest {
+                    LocationRule::Indexed {
+                        location,
+                        template_header,
+                    } => {
+                        if template_header.is_some() {
+                            panic!("not implemented: template_header expected to be None");
+>>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
                         }
-                        LocationRule::Mapped {..} => {
-                            panic!("mapped location is not supported for AddressType::Variable");
+                        let lvar_idx = calc_expression(
+                            location,
+                            nodes,
+                            vars,
+                            component_signal_start,
+                            signal_node_idx,
+                            subcomponents,
+                            io_map,
+                            print_debug,
+                            call_stack,
+                        )
+                        .must_const_usize(nodes, call_stack);
+                        let var_exprs = calc_expression_n(
+                            &store_bucket.src,
+                            nodes,
+                            vars,
+                            component_signal_start,
+                            signal_node_idx,
+                            subcomponents,
+                            store_bucket.context.size,
+                            io_map,
+                            print_debug,
+                            call_stack,
+                        );
+                        for i in 0..store_bucket.context.size {
+                            vars[lvar_idx + i] = Some(var_exprs[i].clone());
                         }
                     }
-                }
+                    LocationRule::Mapped { .. } => {
+                        panic!("mapped location is not supported for AddressType::Variable");
+                    }
+                },
                 AddressType::SubcmpSignal {
                     ref cmp_address,
                     ref input_information,
                     ..
                 } => {
                     let node_idxs = operator_argument_instruction_n(
+<<<<<<< HEAD
                         &store_bucket.src, nodes, signal_node_idx, vars,
                         cmp.signal_offset, subcomponents,
                         store_bucket.context.size, io_map, print_debug,
@@ -629,6 +993,38 @@ fn process_instruction(
                         signal_node_idx, subcomponents, io_map, &node_idxs,
                         &store_bucket.dest, store_bucket.context.size,
                         templates, functions, print_debug, call_stack, cmp);
+=======
+                        &store_bucket.src,
+                        nodes,
+                        signal_node_idx,
+                        vars,
+                        component_signal_start,
+                        subcomponents,
+                        store_bucket.context.size,
+                        io_map,
+                        print_debug,
+                        call_stack,
+                    );
+                    assert_eq!(node_idxs.len(), store_bucket.context.size);
+
+                    store_subcomponent_signals(
+                        cmp_address,
+                        input_information,
+                        nodes,
+                        vars,
+                        component_signal_start,
+                        signal_node_idx,
+                        subcomponents,
+                        io_map,
+                        &node_idxs,
+                        &store_bucket.dest,
+                        store_bucket.context.size,
+                        templates,
+                        functions,
+                        print_debug,
+                        call_stack,
+                    );
+>>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
                 }
             };
         }
@@ -642,9 +1038,23 @@ fn process_instruction(
             let mut count: usize = 0;
             for inst2 in &call_bucket.arguments {
                 let args = calc_expression_n(
+<<<<<<< HEAD
                     inst2, nodes, vars, cmp.signal_offset, signal_node_idx,
                     subcomponents, call_bucket.argument_types[idx].size,
                     io_map, print_debug, call_stack);
+=======
+                    inst2,
+                    nodes,
+                    vars,
+                    component_signal_start,
+                    signal_node_idx,
+                    subcomponents,
+                    call_bucket.argument_types[idx].size,
+                    io_map,
+                    print_debug,
+                    call_stack,
+                );
+>>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
                 for arg in args {
                     fn_vars[count] = Some(arg);
                     count += 1;
@@ -653,28 +1063,65 @@ fn process_instruction(
             }
 
             let r = run_function(
-                call_bucket, functions, &mut fn_vars, nodes, print_debug,
-                call_stack);
+                call_bucket,
+                functions,
+                &mut fn_vars,
+                nodes,
+                print_debug,
+                call_stack,
+            );
 
             match call_bucket.return_info {
-                ReturnType::Intermediate{ ..} => { todo!(); }
-                ReturnType::Final( ref final_data ) => {
-                    if let FnReturn::FnVar {ln, ..} = r {
+                ReturnType::Intermediate { .. } => {
+                    todo!();
+                }
+                ReturnType::Final(ref final_data) => {
+                    if let FnReturn::FnVar { ln, .. } = r {
                         assert!(final_data.context.size >= ln);
                     }
                     // assert_eq!(final_data.context.size, r.ln);
                     store_function_return_results(
+<<<<<<< HEAD
                         final_data, &fn_vars, &r, vars, nodes, signal_node_idx,
                         subcomponents, io_map, templates, functions,
                         print_debug, call_stack, cmp);
+=======
+                        final_data,
+                        &fn_vars,
+                        &r,
+                        vars,
+                        nodes,
+                        component_signal_start,
+                        signal_node_idx,
+                        subcomponents,
+                        io_map,
+                        templates,
+                        functions,
+                        print_debug,
+                        call_stack,
+                    );
+>>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
                 }
             }
         }
         Instruction::Branch(ref branch_bucket) => {
             let cond = calc_expression(
+<<<<<<< HEAD
                 &branch_bucket.cond, nodes, vars, cmp.signal_offset,
                 signal_node_idx, subcomponents, io_map, print_debug,
                 call_stack);
+=======
+                &branch_bucket.cond,
+                nodes,
+                vars,
+                component_signal_start,
+                signal_node_idx,
+                subcomponents,
+                io_map,
+                print_debug,
+                call_stack,
+            );
+>>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
             match cond.to_const(nodes) {
                 Ok(cond_val) => {
                     let inst_list = if cond_val == U256::ZERO {
@@ -684,9 +1131,24 @@ fn process_instruction(
                     };
                     for inst in inst_list {
                         process_instruction(
+<<<<<<< HEAD
                             inst, nodes, signal_node_idx, vars, subcomponents,
                             templates, functions, io_map, print_debug,
                             call_stack, cmp);
+=======
+                            inst,
+                            nodes,
+                            signal_node_idx,
+                            vars,
+                            subcomponents,
+                            templates,
+                            functions,
+                            component_signal_start,
+                            io_map,
+                            print_debug,
+                            call_stack,
+                        );
+>>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
                     }
                 }
                 Err(NodeConstErr::InputSignal) => {
@@ -702,6 +1164,7 @@ fn process_instruction(
                         panic!("Non-constant condition may be used only in ternary operation and both branches of code must be of length 1");
                     }
                     let if_branch = try_signal_store(
+<<<<<<< HEAD
                         &branch_bucket.if_branch[0], nodes, vars,
                         cmp.signal_offset, signal_node_idx, subcomponents,
                         io_map, print_debug, call_stack);
@@ -709,6 +1172,29 @@ fn process_instruction(
                         &branch_bucket.else_branch[0], nodes, vars,
                         cmp.signal_offset, signal_node_idx, subcomponents,
                         io_map, print_debug, call_stack);
+=======
+                        &branch_bucket.if_branch[0],
+                        nodes,
+                        vars,
+                        component_signal_start,
+                        signal_node_idx,
+                        subcomponents,
+                        io_map,
+                        print_debug,
+                        call_stack,
+                    );
+                    let else_branch = try_signal_store(
+                        &branch_bucket.else_branch[0],
+                        nodes,
+                        vars,
+                        component_signal_start,
+                        signal_node_idx,
+                        subcomponents,
+                        io_map,
+                        print_debug,
+                        call_stack,
+                    );
+>>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
                     match (if_branch, else_branch) {
                         (Some((if_signal_idx, if_src)), Some((else_signal_idx, else_src))) => {
                             if if_signal_idx != else_signal_idx {
@@ -722,6 +1208,7 @@ fn process_instruction(
                             );
 
                             let node_idx_if = operator_argument_instruction(
+<<<<<<< HEAD
                                 if_src, nodes, signal_node_idx, vars,
                                 cmp.signal_offset, subcomponents, io_map,
                                 print_debug, call_stack);
@@ -730,8 +1217,37 @@ fn process_instruction(
                                 else_src, nodes, signal_node_idx, vars,
                                 cmp.signal_offset, subcomponents, io_map,
                                 print_debug, call_stack);
+=======
+                                if_src,
+                                nodes,
+                                signal_node_idx,
+                                vars,
+                                component_signal_start,
+                                subcomponents,
+                                io_map,
+                                print_debug,
+                                call_stack,
+                            );
 
-                            let node = Node::TresOp(TresOperation::TernCond, node_idx, node_idx_if, node_idx_else);
+                            let node_idx_else = operator_argument_instruction(
+                                else_src,
+                                nodes,
+                                signal_node_idx,
+                                vars,
+                                component_signal_start,
+                                subcomponents,
+                                io_map,
+                                print_debug,
+                                call_stack,
+                            );
+>>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
+
+                            let node = Node::TresOp(
+                                TresOperation::TernCond,
+                                node_idx,
+                                node_idx_if,
+                                node_idx_else,
+                            );
                             signal_node_idx[if_signal_idx] = nodes.push(node).0;
                         }
                         _ => {
@@ -746,7 +1262,9 @@ fn process_instruction(
                 Err(e) => {
                     panic!(
                         "unexpected condition error: {}: {}",
-                        e, call_stack.join(" -> "));
+                        e,
+                        call_stack.join(" -> ")
+                    );
                 }
             }
         }
@@ -762,6 +1280,7 @@ fn process_instruction(
         }
         Instruction::Loop(ref loop_bucket) => {
             while check_continue_condition(
+<<<<<<< HEAD
                 &loop_bucket.continue_condition, nodes, vars, cmp.signal_offset,
                 signal_node_idx, subcomponents, io_map, print_debug,
                 call_stack) {
@@ -771,16 +1290,57 @@ fn process_instruction(
                         i, nodes, signal_node_idx, vars, subcomponents,
                         templates, functions, io_map, print_debug, call_stack,
                         cmp);
+=======
+                &loop_bucket.continue_condition,
+                nodes,
+                vars,
+                component_signal_start,
+                signal_node_idx,
+                subcomponents,
+                io_map,
+                print_debug,
+                call_stack,
+            ) {
+                for i in &loop_bucket.body {
+                    process_instruction(
+                        i,
+                        nodes,
+                        signal_node_idx,
+                        vars,
+                        subcomponents,
+                        templates,
+                        functions,
+                        component_signal_start,
+                        io_map,
+                        print_debug,
+                        call_stack,
+                    );
+>>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
                 }
             }
         }
         Instruction::CreateCmp(ref create_component_bucket) => {
+<<<<<<< HEAD
             let sub_cmp_idx =
                 calc_expression(
                     &create_component_bucket.sub_cmp_id, nodes, vars,
                     cmp.signal_offset, signal_node_idx, subcomponents,
                     io_map, print_debug, call_stack)
                 .must_const_usize(nodes, call_stack);
+=======
+            let sub_cmp_idx = calc_expression(
+                &create_component_bucket.sub_cmp_id,
+                nodes,
+                vars,
+                component_signal_start,
+                signal_node_idx,
+                subcomponents,
+                io_map,
+                print_debug,
+                call_stack,
+            )
+            .must_const_usize(nodes, call_stack);
+>>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
 
             assert!(
                 sub_cmp_idx + create_component_bucket.number_of_cmp - 1 < subcomponents.len(),
@@ -814,16 +1374,43 @@ fn process_instruction(
                 println!(
                     "{}",
                     fmt_create_cmp_bucket(
+<<<<<<< HEAD
                         create_component_bucket, nodes, vars,
                         cmp.signal_offset, signal_node_idx, &subcomponents,
                         io_map, print_debug, call_stack));
+=======
+                        create_component_bucket,
+                        nodes,
+                        vars,
+                        component_signal_start,
+                        signal_node_idx,
+                        &subcomponents,
+                        io_map,
+                        print_debug,
+                        call_stack
+                    )
+                );
+>>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
             }
             if !create_component_bucket.has_inputs {
                 for i in sub_cmp_idx..sub_cmp_idx + create_component_bucket.number_of_cmp {
                     let cmp = subcomponents[i].as_ref().unwrap();
                     run_template(
+<<<<<<< HEAD
                         templates, functions, nodes, signal_node_idx, io_map,
                         print_debug, call_stack, cmp)
+=======
+                        templates,
+                        functions,
+                        subcomponents[i].as_ref().unwrap().template_id,
+                        nodes,
+                        signal_node_idx,
+                        subcomponents[i].as_ref().unwrap().signal_offset,
+                        io_map,
+                        print_debug,
+                        call_stack,
+                    )
+>>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
                 }
             }
         }
@@ -831,11 +1418,17 @@ fn process_instruction(
 }
 
 fn store_function_return_results_into_variable(
-    final_data: &FinalData, src_vars: &Vec<Option<Var>>, ret: &FnReturn,
-    dst_vars: &mut Vec<Option<Var>>, nodes: &mut Nodes,
-    call_stack: &Vec<String>) {
-
-    assert!(matches!(final_data.dest_address_type, AddressType::Variable));
+    final_data: &FinalData,
+    src_vars: &Vec<Option<Var>>,
+    ret: &FnReturn,
+    dst_vars: &mut Vec<Option<Var>>,
+    nodes: &mut Nodes,
+    call_stack: &Vec<String>,
+) {
+    assert!(matches!(
+        final_data.dest_address_type,
+        AddressType::Variable
+    ));
 
     match &final_data.dest {
         LocationRule::Indexed {
@@ -845,9 +1438,8 @@ fn store_function_return_results_into_variable(
             if template_header.is_some() {
                 panic!("not implemented: template_header expected to be None");
             }
-            let lvar_idx =
-                calc_function_expression(location, dst_vars, nodes, call_stack)
-                    .must_const_usize(nodes, call_stack);
+            let lvar_idx = calc_function_expression(location, dst_vars, nodes, call_stack)
+                .must_const_usize(nodes, call_stack);
 
             match ret {
                 FnReturn::FnVar { idx, .. } => {
@@ -859,7 +1451,6 @@ fn store_function_return_results_into_variable(
                         };
                         dst_vars[lvar_idx + i] = Some(v.clone());
                     }
-
                 }
                 FnReturn::Value(v) => {
                     assert_eq!(final_data.context.size, 1);
@@ -867,11 +1458,14 @@ fn store_function_return_results_into_variable(
                 }
             }
         }
-        LocationRule::Mapped { .. } => { todo!() }
+        LocationRule::Mapped { .. } => {
+            todo!()
+        }
     }
 }
 
 fn store_function_return_results_into_subsignal(
+<<<<<<< HEAD
     final_data: &FinalData, src_vars: &Vec<Option<Var>>, ret: &FnReturn,
     dst_vars: &mut Vec<Option<Var>>, nodes: &mut Nodes,
     signal_node_idx: &mut Vec<usize>,
@@ -881,6 +1475,28 @@ fn store_function_return_results_into_subsignal(
     call_stack: &Vec<String>, cmp: &ComponentInstance) {
 
     let (cmp_address, input_information) = if let AddressType::SubcmpSignal {cmp_address, input_information, ..} = &final_data.dest_address_type {
+=======
+    final_data: &FinalData,
+    src_vars: &Vec<Option<Var>>,
+    ret: &FnReturn,
+    dst_vars: &mut Vec<Option<Var>>,
+    nodes: &mut Nodes,
+    component_signal_start: usize,
+    signal_node_idx: &mut Vec<usize>,
+    subcomponents: &mut Vec<Option<ComponentInstance>>,
+    io_map: &TemplateInstanceIOMap,
+    templates: &Vec<TemplateCode>,
+    functions: &Vec<FunctionCode>,
+    print_debug: bool,
+    call_stack: &Vec<String>,
+) {
+    let (cmp_address, input_information) = if let AddressType::SubcmpSignal {
+        cmp_address,
+        input_information,
+        ..
+    } = &final_data.dest_address_type
+    {
+>>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
         (cmp_address, input_information)
     } else {
         panic!("expected SubcmpSignal destination address type");
@@ -890,20 +1506,23 @@ fn store_function_return_results_into_subsignal(
     match ret {
         FnReturn::FnVar { idx, .. } => {
             for i in 0..final_data.context.size {
-                match src_vars[idx+i] {
+                match src_vars[idx + i] {
                     Some(Var::Node(node_idx)) => {
                         src_node_idxs.push(node_idx);
                     }
                     Some(Var::Value(v)) => {
+<<<<<<< HEAD
                         src_node_idxs.push(
                             nodes.push(Node::Constant(v)).0);
+=======
+                        src_node_idxs.push(nodes.push(Node::Constant(v.clone())).0);
+>>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
                     }
                     None => {
                         panic!("variable at index {} is not set", i);
                     }
                 }
             }
-
         }
         FnReturn::Value(v) => {
             assert_eq!(final_data.context.size, 1);
@@ -919,6 +1538,7 @@ fn store_function_return_results_into_subsignal(
     }
 
     store_subcomponent_signals(
+<<<<<<< HEAD
         cmp_address, input_information, nodes, dst_vars, signal_node_idx,
         subcomponents, io_map, &src_node_idxs, &final_data.dest,
         final_data.context.size, templates, functions, print_debug, call_stack,
@@ -934,26 +1554,82 @@ fn store_function_return_results(
     functions: &Vec<FunctionCode>, print_debug: bool,
     call_stack: &Vec<String>, cmp: &ComponentInstance) {
 
+=======
+        cmp_address,
+        input_information,
+        nodes,
+        dst_vars,
+        component_signal_start,
+        signal_node_idx,
+        subcomponents,
+        io_map,
+        &src_node_idxs,
+        &final_data.dest,
+        final_data.context.size,
+        templates,
+        functions,
+        print_debug,
+        call_stack,
+    );
+}
+
+fn store_function_return_results(
+    final_data: &FinalData,
+    src_vars: &Vec<Option<Var>>,
+    ret: &FnReturn,
+    dst_vars: &mut Vec<Option<Var>>,
+    nodes: &mut Nodes,
+    component_signal_start: usize,
+    signal_node_idx: &mut Vec<usize>,
+    subcomponents: &mut Vec<Option<ComponentInstance>>,
+    io_map: &TemplateInstanceIOMap,
+    templates: &Vec<TemplateCode>,
+    functions: &Vec<FunctionCode>,
+    print_debug: bool,
+    call_stack: &Vec<String>,
+) {
+>>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
     match &final_data.dest_address_type {
         AddressType::Signal => todo!("Signal"),
         AddressType::Variable => {
             store_function_return_results_into_variable(
-                final_data, src_vars, ret, dst_vars, nodes, call_stack);
+                final_data, src_vars, ret, dst_vars, nodes, call_stack,
+            );
         }
-        AddressType::SubcmpSignal {..} => {
+        AddressType::SubcmpSignal { .. } => {
             store_function_return_results_into_subsignal(
+<<<<<<< HEAD
                 final_data, src_vars, ret, dst_vars, nodes, signal_node_idx,
                 subcomponents, io_map, templates, functions, print_debug,
                 call_stack, cmp);
+=======
+                final_data,
+                src_vars,
+                ret,
+                dst_vars,
+                nodes,
+                component_signal_start,
+                signal_node_idx,
+                subcomponents,
+                io_map,
+                templates,
+                functions,
+                print_debug,
+                call_stack,
+            );
+>>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
         }
     }
 }
 
 fn run_function(
-    call_bucket: &CallBucket, functions: &Vec<FunctionCode>,
-    fn_vars: &mut Vec<Option<Var>>, nodes: &mut Nodes,
-    print_debug: bool, call_stack: &Vec<String>) -> FnReturn {
-
+    call_bucket: &CallBucket,
+    functions: &Vec<FunctionCode>,
+    fn_vars: &mut Vec<Option<Var>>,
+    nodes: &mut Nodes,
+    print_debug: bool,
+    call_stack: &Vec<String>,
+) -> FnReturn {
     // for i in functions {
     //     println!("Function: {} {}", i.header, i.name);
     // }
@@ -968,8 +1644,7 @@ fn run_function(
 
     let mut r: Option<FnReturn> = None;
     for i in &f.body {
-        r = process_function_instruction(
-            i, fn_vars, nodes, functions, print_debug, &call_stack);
+        r = process_function_instruction(i, fn_vars, nodes, functions, print_debug, &call_stack);
         if r.is_some() {
             break;
         }
@@ -983,9 +1658,12 @@ fn run_function(
     r
 }
 fn calc_function_expression_n(
-    inst: &InstructionPointer, fn_vars: &mut Vec<Option<Var>>,
-    nodes: &mut Nodes, n: usize, call_stack: &Vec<String>) -> Vec<Var> {
-
+    inst: &InstructionPointer,
+    fn_vars: &mut Vec<Option<Var>>,
+    nodes: &mut Nodes,
+    n: usize,
+    call_stack: &Vec<String>,
+) -> Vec<Var> {
     if n == 1 {
         let v = calc_function_expression(inst, fn_vars, nodes, call_stack);
         return vec![v];
@@ -995,38 +1673,37 @@ fn calc_function_expression_n(
         Instruction::Value(ref value_bucket) => {
             var_from_value_instruction_n(value_bucket, nodes, n, call_stack)
         }
-        Instruction::Load(ref load_bucket) => {
-            match load_bucket.address_type {
-                AddressType::Variable => match load_bucket.src {
-                    LocationRule::Indexed {
-                        ref location,
-                        ref template_header,
-                    } => {
-                        if template_header.is_some() {
-                            panic!("not implemented: template_header expected to be None");
-                        }
-                        let var_idx = calc_function_expression(
-                            location, fn_vars, nodes, call_stack);
-                        let var_idx = var_idx.must_const_usize(
-                            nodes, call_stack);
-                        let mut result = Vec::with_capacity(n);
-                        for i in 0..n {
-                            result.push(match fn_vars[var_idx+i] {
-                                Some(ref v) => v.clone(),
-                                None => panic!("variable is not set yet"),
-                            });
-                        };
-                        result
+        Instruction::Load(ref load_bucket) => match load_bucket.address_type {
+            AddressType::Variable => match load_bucket.src {
+                LocationRule::Indexed {
+                    ref location,
+                    ref template_header,
+                } => {
+                    if template_header.is_some() {
+                        panic!("not implemented: template_header expected to be None");
                     }
-                    LocationRule::Mapped { .. } => {
-                        todo!()
+                    let var_idx = calc_function_expression(location, fn_vars, nodes, call_stack);
+                    let var_idx = var_idx.must_const_usize(nodes, call_stack);
+                    let mut result = Vec::with_capacity(n);
+                    for i in 0..n {
+                        result.push(match fn_vars[var_idx + i] {
+                            Some(ref v) => v.clone(),
+                            None => panic!("variable is not set yet"),
+                        });
                     }
-                },
-                _ => {
-                    panic!("not implemented for a function: {}", load_bucket.to_string());
+                    result
                 }
+                LocationRule::Mapped { .. } => {
+                    todo!()
+                }
+            },
+            _ => {
+                panic!(
+                    "not implemented for a function: {}",
+                    load_bucket.to_string()
+                );
             }
-        }
+        },
         _ => {
             panic!("not implemented: {}", inst.to_string())
         }
@@ -1034,54 +1711,52 @@ fn calc_function_expression_n(
 }
 
 fn calc_function_expression(
-    inst: &InstructionPointer, fn_vars: &mut Vec<Option<Var>>,
-    nodes: &mut Nodes, call_stack: &Vec<String>) -> Var {
-
+    inst: &InstructionPointer,
+    fn_vars: &mut Vec<Option<Var>>,
+    nodes: &mut Nodes,
+    call_stack: &Vec<String>,
+) -> Var {
     match **inst {
-        Instruction::Value(ref value_bucket) => {
-            match value_bucket.parse_as {
-                ValueType::BigInt => match nodes.get(NodeIdx(value_bucket.value)) {
-                    Some(Node::Constant(..)) => Var::Node(value_bucket.value),
-                    _ => panic!("not a constant"),
-                },
-                ValueType::U32 => Var::Value(U256::from(value_bucket.value)),
-            }
-        }
-        Instruction::Load(ref load_bucket) => {
-            match load_bucket.address_type {
-                AddressType::Variable => match load_bucket.src {
-                    LocationRule::Indexed {
-                        ref location,
-                        ref template_header,
-                    } => {
-                        if template_header.is_some() {
-                            panic!("not implemented: template_header expected to be None");
-                        }
-                        let var_idx = calc_function_expression(
-                            location, fn_vars, nodes, call_stack);
-                        let var_idx = var_idx.to_const_usize(nodes)
-                            .unwrap_or_else(|e| {
-                                panic!("expected constant value: {}: {}",
-                                       e, call_stack.join(" -> "));
-                            });
-                        match fn_vars[var_idx] {
-                            Some(ref v) => v.clone(),
-                            None => panic!("variable is not set yet"),
-                        }
-                    }
-                    LocationRule::Mapped { .. } => {
-                        todo!()
-                    }
-                },
-                _ => {
-                    panic!("not implemented for function: {}", load_bucket.to_string());
-                }
-            }
-        }
-        Instruction::Compute(ref compute_bucket) => {
-            compute_function_expression(
-                compute_bucket, fn_vars, nodes, call_stack)
+        Instruction::Value(ref value_bucket) => match value_bucket.parse_as {
+            ValueType::BigInt => match nodes.get(NodeIdx(value_bucket.value)) {
+                Some(Node::Constant(..)) => Var::Node(value_bucket.value),
+                _ => panic!("not a constant"),
+            },
+            ValueType::U32 => Var::Value(U256::from(value_bucket.value)),
         },
+        Instruction::Load(ref load_bucket) => match load_bucket.address_type {
+            AddressType::Variable => match load_bucket.src {
+                LocationRule::Indexed {
+                    ref location,
+                    ref template_header,
+                } => {
+                    if template_header.is_some() {
+                        panic!("not implemented: template_header expected to be None");
+                    }
+                    let var_idx = calc_function_expression(location, fn_vars, nodes, call_stack);
+                    let var_idx = var_idx.to_const_usize(nodes).unwrap_or_else(|e| {
+                        panic!(
+                            "expected constant value: {}: {}",
+                            e,
+                            call_stack.join(" -> ")
+                        );
+                    });
+                    match fn_vars[var_idx] {
+                        Some(ref v) => v.clone(),
+                        None => panic!("variable is not set yet"),
+                    }
+                }
+                LocationRule::Mapped { .. } => {
+                    todo!()
+                }
+            },
+            _ => {
+                panic!("not implemented for function: {}", load_bucket.to_string());
+            }
+        },
+        Instruction::Compute(ref compute_bucket) => {
+            compute_function_expression(compute_bucket, fn_vars, nodes, call_stack)
+        }
         _ => {
             panic!("not implemented: {}", inst.to_string())
         }
@@ -1090,25 +1765,31 @@ fn calc_function_expression(
 
 fn node_from_var(v: &Var, nodes: &mut Nodes) -> usize {
     match v {
-        Var::Value(ref v) => {
-            nodes.push(Node::Constant(v.clone())).0
-        }
+        Var::Value(ref v) => nodes.push(Node::Constant(v.clone())).0,
         Var::Node(node_idx) => *node_idx,
     }
 }
 
 fn compute_function_expression(
-    compute_bucket: &ComputeBucket, fn_vars: &mut Vec<Option<Var>>,
-    nodes: &mut Nodes, call_stack: &Vec<String>) -> Var {
-
+    compute_bucket: &ComputeBucket,
+    fn_vars: &mut Vec<Option<Var>>,
+    nodes: &mut Nodes,
+    call_stack: &Vec<String>,
+) -> Var {
     if let Some(op) = DUO_OPERATORS_MAP.get(&compute_bucket.op) {
         assert_eq!(compute_bucket.stack.len(), 2);
         let a = calc_function_expression(
-            compute_bucket.stack.get(0).unwrap(), fn_vars,
-            nodes, call_stack);
+            compute_bucket.stack.get(0).unwrap(),
+            fn_vars,
+            nodes,
+            call_stack,
+        );
         let b = calc_function_expression(
-            compute_bucket.stack.get(1).unwrap(), fn_vars,
-            nodes, call_stack);
+            compute_bucket.stack.get(1).unwrap(),
+            fn_vars,
+            nodes,
+            call_stack,
+        );
         match (&a, &b) {
             (Var::Value(a), Var::Value(b)) => {
                 return Var::Value(op.eval(a.clone(), b.clone()));
@@ -1124,8 +1805,11 @@ fn compute_function_expression(
     if let Some(op) = UNO_OPERATORS_MAP.get(&compute_bucket.op) {
         assert_eq!(compute_bucket.stack.len(), 1);
         let a = calc_function_expression(
-            compute_bucket.stack.get(0).unwrap(), fn_vars,
-            nodes, call_stack);
+            compute_bucket.stack.get(0).unwrap(),
+            fn_vars,
+            nodes,
+            call_stack,
+        );
         match &a {
             Var::Value(v) => {
                 return Var::Value(op.eval(v.clone()));
@@ -1138,50 +1822,53 @@ fn compute_function_expression(
 
     panic!(
         "unsupported operator: {}: {}",
-        compute_bucket.op.to_string(), call_stack.join(" -> "));
+        compute_bucket.op.to_string(),
+        call_stack.join(" -> ")
+    );
 }
 
 enum FnReturn {
-    FnVar{idx: usize, ln: usize},
+    FnVar { idx: usize, ln: usize },
     Value(Var),
 }
 
 fn build_return(
-    return_bucket: &ReturnBucket, fn_vars: &mut Vec<Option<Var>>,
-    nodes: &mut Nodes, call_stack: &Vec<String>) -> FnReturn {
-
+    return_bucket: &ReturnBucket,
+    fn_vars: &mut Vec<Option<Var>>,
+    nodes: &mut Nodes,
+    call_stack: &Vec<String>,
+) -> FnReturn {
     match *return_bucket.value {
-        Instruction::Load(ref load_bucket) => {
-            FnReturn::FnVar {
-                idx: calc_return_load_idx(
-                    load_bucket, fn_vars, nodes, call_stack),
-                ln: return_bucket.with_size,
-            }
-        }
+        Instruction::Load(ref load_bucket) => FnReturn::FnVar {
+            idx: calc_return_load_idx(load_bucket, fn_vars, nodes, call_stack),
+            ln: return_bucket.with_size,
+        },
         Instruction::Compute(ref compute_bucket) => {
-            let v = compute_function_expression(
-                compute_bucket, fn_vars, nodes, call_stack);
+            let v = compute_function_expression(compute_bucket, fn_vars, nodes, call_stack);
             FnReturn::Value(v)
         }
         Instruction::Value(ref value_bucket) => {
-            let mut vars = var_from_value_instruction_n(
-                value_bucket, nodes, 1, call_stack);
+            let mut vars = var_from_value_instruction_n(value_bucket, nodes, 1, call_stack);
             assert_eq!(vars.len(), 1, "expected one result value");
             FnReturn::Value(vars.pop().unwrap())
         }
         _ => {
-            panic!("unexpected instruction for return statement: {}",
-                   return_bucket.value.to_string());
+            panic!(
+                "unexpected instruction for return statement: {}",
+                return_bucket.value.to_string()
+            );
         }
     }
 }
 
 fn calc_return_load_idx(
-    load_bucket: &LoadBucket, fn_vars: &mut Vec<Option<Var>>,
-    nodes: &mut Nodes, call_stack: &Vec<String>) -> usize {
-
+    load_bucket: &LoadBucket,
+    fn_vars: &mut Vec<Option<Var>>,
+    nodes: &mut Nodes,
+    call_stack: &Vec<String>,
+) -> usize {
     match &load_bucket.address_type {
-        AddressType::Variable => {}, // OK
+        AddressType::Variable => {} // OK
         _ => {
             panic!("expected the return statement support only variable address type");
         }
@@ -1197,96 +1884,106 @@ fn calc_return_load_idx(
 
 // return variable value and it's index
 fn store_function_variable(
-    store_bucket: &StoreBucket, fn_vars: &mut Vec<Option<Var>>,
-    nodes: &mut Nodes, call_stack: &Vec<String>) -> (Var, usize) {
-
-    assert!(matches!(store_bucket.dest_address_type, AddressType::Variable),
-            "functions can store only inside variables: dest_address_type: {}",
-            store_bucket.dest_address_type.to_string());
+    store_bucket: &StoreBucket,
+    fn_vars: &mut Vec<Option<Var>>,
+    nodes: &mut Nodes,
+    call_stack: &Vec<String>,
+) -> (Var, usize) {
+    assert!(
+        matches!(store_bucket.dest_address_type, AddressType::Variable),
+        "functions can store only inside variables: dest_address_type: {}",
+        store_bucket.dest_address_type.to_string()
+    );
 
     let (location, template_header) = match &store_bucket.dest {
         LocationRule::Indexed {
             location,
             template_header,
-        } => {
-            (location, template_header)
-        }
+        } => (location, template_header),
         LocationRule::Mapped { .. } => {
             panic!("location rule supposed to be Indexed for variables");
         }
     };
 
-    let lvar_idx =
-        calc_function_expression(
-            location, fn_vars, nodes, call_stack)
+    let lvar_idx = calc_function_expression(location, fn_vars, nodes, call_stack)
         .must_const_usize(nodes, call_stack);
 
     assert_eq!(
-        store_bucket.context.size, 1,
+        store_bucket.context.size,
+        1,
         "variable size in ternary expression must be 1: {}, {}",
         template_header.as_ref().unwrap_or(&"-".to_string()),
-        call_stack.join(" -> "));
+        call_stack.join(" -> ")
+    );
 
-    let v = calc_function_expression(
-        &store_bucket.src, fn_vars, nodes, call_stack);
+    let v = calc_function_expression(&store_bucket.src, fn_vars, nodes, call_stack);
 
     (v, lvar_idx)
 }
 
 fn process_function_instruction(
-    inst: &InstructionPointer, fn_vars: &mut Vec<Option<Var>>,
-    nodes: &mut Nodes, functions: &Vec<FunctionCode>,
-    print_debug: bool, call_stack: &Vec<String>) -> Option<FnReturn> {
-
+    inst: &InstructionPointer,
+    fn_vars: &mut Vec<Option<Var>>,
+    nodes: &mut Nodes,
+    functions: &Vec<FunctionCode>,
+    print_debug: bool,
+    call_stack: &Vec<String>,
+) -> Option<FnReturn> {
     match **inst {
         Instruction::Store(ref store_bucket) => {
             // println!("store bucket: {}", store_bucket.to_string());
             match store_bucket.dest_address_type {
-                AddressType::Variable => {
-                    match &store_bucket.dest {
-                        LocationRule::Indexed {
-                            location,
-                            template_header,
-                        } => {
-                            if template_header.is_some() {
-                                panic!("not implemented: template_header expected to be None");
-                            }
-                            let lvar_idx =
-                                calc_function_expression(
-                                    location, fn_vars, nodes, call_stack)
+                AddressType::Variable => match &store_bucket.dest {
+                    LocationRule::Indexed {
+                        location,
+                        template_header,
+                    } => {
+                        if template_header.is_some() {
+                            panic!("not implemented: template_header expected to be None");
+                        }
+                        let lvar_idx =
+                            calc_function_expression(location, fn_vars, nodes, call_stack)
                                 .must_const_usize(nodes, call_stack);
-                            if store_bucket.context.size == 1 {
-                                fn_vars[lvar_idx] = Some(calc_function_expression(
-                                    &store_bucket.src, fn_vars, nodes,
-                                    call_stack));
-                            } else {
-                                let values = calc_function_expression_n(
-                                    &store_bucket.src, fn_vars, nodes,
-                                    store_bucket.context.size, call_stack);
-                                assert_eq!(values.len(), store_bucket.context.size);
-                                for i in 0..store_bucket.context.size {
-                                    fn_vars[lvar_idx + i] = Some(values[i].clone());
-                                }
+                        if store_bucket.context.size == 1 {
+                            fn_vars[lvar_idx] = Some(calc_function_expression(
+                                &store_bucket.src,
+                                fn_vars,
+                                nodes,
+                                call_stack,
+                            ));
+                        } else {
+                            let values = calc_function_expression_n(
+                                &store_bucket.src,
+                                fn_vars,
+                                nodes,
+                                store_bucket.context.size,
+                                call_stack,
+                            );
+                            assert_eq!(values.len(), store_bucket.context.size);
+                            for i in 0..store_bucket.context.size {
+                                fn_vars[lvar_idx + i] = Some(values[i].clone());
                             }
-                            None
                         }
-                        LocationRule::Mapped {..} => {
-                            panic!("mapped location is not supported");
-                        }
+                        None
                     }
+                    LocationRule::Mapped { .. } => {
+                        panic!("mapped location is not supported");
+                    }
+                },
+                _ => {
+                    panic!("not a variable store inside a function")
                 }
-                _ => {panic!("not a variable store inside a function")}
             }
         }
         Instruction::Branch(ref branch_bucket) => {
             // println!("branch bucket: {}", branch_bucket.to_string());
 
-            let cond = calc_function_expression(
-                &branch_bucket.cond, fn_vars, nodes, call_stack);
+            let cond = calc_function_expression(&branch_bucket.cond, fn_vars, nodes, call_stack);
             let cond_const = cond.to_const(nodes);
 
             match cond_const {
-                Ok(cond_const) => { // condition expression is static
+                Ok(cond_const) => {
+                    // condition expression is static
                     let branch = if cond_const.gt(&U256::ZERO) {
                         &branch_bucket.if_branch
                     } else {
@@ -1294,13 +1991,20 @@ fn process_function_instruction(
                     };
                     for i in branch {
                         let r = process_function_instruction(
-                            i, fn_vars, nodes, functions, print_debug, call_stack);
+                            i,
+                            fn_vars,
+                            nodes,
+                            functions,
+                            print_debug,
+                            call_stack,
+                        );
                         if r.is_some() {
                             return r;
                         }
                     }
                 }
-                Err(NodeConstErr::InputSignal) => { // dynamic condition expression
+                Err(NodeConstErr::InputSignal) => {
+                    // dynamic condition expression
                     // The only supported dynamic condition is a ternary operation
                     // Both branches should be exactly one operation of
                     // storing a variable to the same signal index.
@@ -1316,19 +2020,18 @@ fn process_function_instruction(
                         call_stack.join(" -> "));
                     let (var_if, var_if_idx) = match *branch_bucket.if_branch[0] {
                         Instruction::Store(ref store_bucket) => {
-                            store_function_variable(
-                                store_bucket, fn_vars, nodes, call_stack)
+                            store_function_variable(store_bucket, fn_vars, nodes, call_stack)
                         }
                         _ => {
                             panic!(
                                 "expected store operation in ternary operation of branch 'if': {}",
-                                call_stack.join(" -> "));
+                                call_stack.join(" -> ")
+                            );
                         }
                     };
                     let (var_else, var_else_idx) = match *branch_bucket.else_branch[0] {
                         Instruction::Store(ref store_bucket) => {
-                            store_function_variable(
-                                store_bucket, fn_vars, nodes, call_stack)
+                            store_function_variable(store_bucket, fn_vars, nodes, call_stack)
                         }
                         _ => {
                             panic!(
@@ -1338,20 +2041,26 @@ fn process_function_instruction(
                     };
                     assert_eq!(
                         var_if_idx, var_else_idx,
-                        "in ternary operation if and else branches must store to the same variable");
+                        "in ternary operation if and else branches must store to the same variable"
+                    );
 
                     let cond_node_idx = node_from_var(&cond, nodes);
                     let if_node_idx = node_from_var(&var_if, nodes);
                     let else_node_idx = node_from_var(&var_else, nodes);
                     let tern_node_idx = nodes.push(Node::TresOp(
-                        TresOperation::TernCond, cond_node_idx, if_node_idx,
-                        else_node_idx));
+                        TresOperation::TernCond,
+                        cond_node_idx,
+                        if_node_idx,
+                        else_node_idx,
+                    ));
                     fn_vars[var_if_idx] = Some(Var::Node(tern_node_idx.0));
                 }
                 Err(e) => {
                     panic!(
                         "error calculating function branch condition: {}: {}",
-                        e, call_stack.join(" -> "));
+                        e,
+                        call_stack.join(" -> ")
+                    );
                 }
             }
             None
@@ -1365,13 +2074,22 @@ fn process_function_instruction(
             //     println!("loop: {}", loop_bucket.to_string());
             // }
             while check_continue_condition_function(
-                &loop_bucket.continue_condition, fn_vars, nodes, call_stack) {
-
+                &loop_bucket.continue_condition,
+                fn_vars,
+                nodes,
+                call_stack,
+            ) {
                 for i in &loop_bucket.body {
                     process_function_instruction(
-                        i, fn_vars, nodes, functions, print_debug, call_stack);
+                        i,
+                        fn_vars,
+                        nodes,
+                        functions,
+                        print_debug,
+                        call_stack,
+                    );
                 }
-            };
+            }
             None
         }
         Instruction::Call(ref call_bucket) => {
@@ -1381,8 +2099,12 @@ fn process_function_instruction(
             let mut count: usize = 0;
             for inst2 in &call_bucket.arguments {
                 let args = calc_function_expression_n(
-                    inst2, fn_vars, nodes, call_bucket.argument_types[idx].size,
-                    call_stack);
+                    inst2,
+                    fn_vars,
+                    nodes,
+                    call_bucket.argument_types[idx].size,
+                    call_stack,
+                );
                 for arg in args {
                     new_fn_vars[count] = Some(arg);
                     count += 1;
@@ -1391,19 +2113,31 @@ fn process_function_instruction(
             }
 
             let r = run_function(
-                call_bucket, functions, &mut new_fn_vars, nodes, print_debug,
-                call_stack);
+                call_bucket,
+                functions,
+                &mut new_fn_vars,
+                nodes,
+                print_debug,
+                call_stack,
+            );
 
             match call_bucket.return_info {
-                ReturnType::Intermediate{ ..} => { todo!(); }
-                ReturnType::Final( ref final_data ) => {
-                    if let FnReturn::FnVar { ln, ..} = r {
+                ReturnType::Intermediate { .. } => {
+                    todo!();
+                }
+                ReturnType::Final(ref final_data) => {
+                    if let FnReturn::FnVar { ln, .. } = r {
                         assert!(final_data.context.size >= ln);
                     }
                     // assert_eq!(final_data.context.size, r.ln);
                     store_function_return_results_into_variable(
-                        final_data, &new_fn_vars, &r, fn_vars, nodes,
-                        call_stack);
+                        final_data,
+                        &new_fn_vars,
+                        &r,
+                        fn_vars,
+                        nodes,
+                        call_stack,
+                    );
                 }
             };
             None
@@ -1415,29 +2149,37 @@ fn process_function_instruction(
         _ => {
             panic!(
                 "not implemented: {}; {}",
-                inst.to_string(), call_stack.join(" -> "));
+                inst.to_string(),
+                call_stack.join(" -> ")
+            );
         }
     }
 }
 
 fn check_continue_condition_function(
-    inst: &InstructionPointer, fn_vars: &mut Vec<Option<Var>>,
-    nodes: &mut Nodes, call_stack: &Vec<String>) -> bool {
-
+    inst: &InstructionPointer,
+    fn_vars: &mut Vec<Option<Var>>,
+    nodes: &mut Nodes,
+    call_stack: &Vec<String>,
+) -> bool {
     let val = calc_function_expression(inst, fn_vars, nodes, call_stack)
         .to_const(nodes)
-        .unwrap_or_else(
-            |e| panic!(
+        .unwrap_or_else(|e| {
+            panic!(
                 "condition is not a constant: {}: {}",
-                e, call_stack.join(" -> ")));
+                e,
+                call_stack.join(" -> ")
+            )
+        });
 
     val != U256::ZERO
 }
 
-
-
 fn find_function<'a>(name: &str, functions: &'a Vec<FunctionCode>) -> &'a FunctionCode {
-    functions.iter().find(|f| f.header == name).expect("function not found")
+    functions
+        .iter()
+        .find(|f| f.header == name)
+        .expect("function not found")
 }
 
 #[derive(Debug, Clone)]
@@ -1452,7 +2194,6 @@ impl<'a> fmt::Display for ValueTooBigError {
 impl Error for ValueTooBigError {}
 
 fn bigint_to_usize(value: &U256) -> Result<usize, Box<dyn Error>> {
-
     // Convert U256 to usize
     let bytes = value.to_le_bytes::<32>().to_vec(); // Convert to little-endian bytes
     for i in std::mem::size_of::<usize>()..bytes.len() {
@@ -1466,7 +2207,6 @@ fn bigint_to_usize(value: &U256) -> Result<usize, Box<dyn Error>> {
             .expect("slice with incorrect length"),
     ))
 }
-
 
 struct ComponentInstance {
     template_id: usize,
@@ -1487,12 +2227,20 @@ fn fmt_create_cmp_bucket(
     call_stack: &Vec<String>,
 ) -> String {
     let sub_cmp_id = calc_expression(
-        &cmp_bucket.sub_cmp_id, nodes, vars, component_signal_start,
-        signal_node_idx, subcomponents, io_map, print_debug, call_stack);
+        &cmp_bucket.sub_cmp_id,
+        nodes,
+        vars,
+        component_signal_start,
+        signal_node_idx,
+        subcomponents,
+        io_map,
+        print_debug,
+        call_stack,
+    );
 
     let sub_cmp_id = match sub_cmp_id {
         Var::Value(ref c) => format!("Constant {}", c.to_string()),
-        Var::Node(idx) => format!("Variable {}", idx)
+        Var::Node(idx) => format!("Variable {}", idx),
     };
 
     format!(
@@ -1536,12 +2284,15 @@ enum Var {
 impl ToString for Var {
     fn to_string(&self) -> String {
         match self {
-            Var::Value(ref c) => { format!("Var::Value({})", c.to_string()) }
-            Var::Node(idx) => { format!("Var::Node({})", idx) }
+            Var::Value(ref c) => {
+                format!("Var::Value({})", c.to_string())
+            }
+            Var::Node(idx) => {
+                format!("Var::Node({})", idx)
+            }
         }
     }
 }
-
 
 impl Var {
     fn to_const(&self, nodes: &Nodes) -> Result<U256, NodeConstErr> {
@@ -1556,9 +2307,7 @@ impl Var {
         Ok(bigint_to_usize(&c)?)
     }
 
-    fn must_const_usize(
-        &self, nodes: &Nodes, call_stack: &Vec<String>) -> usize {
-
+    fn must_const_usize(&self, nodes: &Nodes, call_stack: &Vec<String>) -> usize {
         self.to_const_usize(nodes).unwrap_or_else(|e| {
             panic!("{}: {}", e, call_stack.join(" -> "));
         })
@@ -1566,13 +2315,17 @@ impl Var {
 }
 
 fn load_n(
-    load_bucket: &LoadBucket, nodes: &mut Nodes,
-    vars: &mut Vec<Option<Var>>, component_signal_start: usize,
+    load_bucket: &LoadBucket,
+    nodes: &mut Nodes,
+    vars: &mut Vec<Option<Var>>,
+    component_signal_start: usize,
     signal_node_idx: &mut Vec<usize>,
-    subcomponents: &Vec<Option<ComponentInstance>>, size: usize,
-    io_map: &TemplateInstanceIOMap, print_debug: bool,
-    call_stack: &Vec<String>) -> Vec<Var> {
-
+    subcomponents: &Vec<Option<ComponentInstance>>,
+    size: usize,
+    io_map: &TemplateInstanceIOMap,
+    print_debug: bool,
+    call_stack: &Vec<String>,
+) -> Vec<Var> {
     match load_bucket.address_type {
         AddressType::Signal => match &load_bucket.src {
             LocationRule::Indexed {
@@ -1583,19 +2336,29 @@ fn load_n(
                     panic!("not implemented: template_header expected to be None");
                 }
                 let signal_idx = calc_expression(
-                    location, nodes, vars, component_signal_start,
-                    signal_node_idx, subcomponents, io_map, print_debug,
-                    call_stack);
-                let signal_idx = signal_idx.must_const_usize(
-                    nodes, call_stack);
+                    location,
+                    nodes,
+                    vars,
+                    component_signal_start,
+                    signal_node_idx,
+                    subcomponents,
+                    io_map,
+                    print_debug,
+                    call_stack,
+                );
+                let signal_idx = signal_idx.must_const_usize(nodes, call_stack);
                 let mut result = Vec::with_capacity(size);
                 for i in 0..size {
                     let signal_idx = component_signal_start + signal_idx + i;
                     let signal_node = signal_node_idx[signal_idx];
                     assert_ne!(
-                        signal_node, usize::MAX,
+                        signal_node,
+                        usize::MAX,
                         "signal {}/{}/{} is not set yet",
-                        component_signal_start, signal_idx, i);
+                        component_signal_start,
+                        signal_idx,
+                        i
+                    );
                     result.push(Var::Node(signal_node));
                 }
                 return result;
@@ -1607,12 +2370,18 @@ fn load_n(
         AddressType::SubcmpSignal {
             ref cmp_address, ..
         } => {
-            let subcomponent_idx =
-                calc_expression(
-                    cmp_address, nodes, vars, component_signal_start,
-                    signal_node_idx, subcomponents, io_map, print_debug,
-                    call_stack)
-                .must_const_usize(nodes, call_stack);
+            let subcomponent_idx = calc_expression(
+                cmp_address,
+                nodes,
+                vars,
+                component_signal_start,
+                signal_node_idx,
+                subcomponents,
+                io_map,
+                print_debug,
+                call_stack,
+            )
+            .must_const_usize(nodes, call_stack);
 
             let (signal_idx, template_header) = match load_bucket.src {
                 LocationRule::Indexed {
@@ -1620,26 +2389,49 @@ fn load_n(
                     ref template_header,
                 } => {
                     let signal_idx = calc_expression(
-                        location, nodes, vars, component_signal_start,
-                        signal_node_idx, subcomponents, io_map, print_debug,
-                        call_stack);
-                    let signal_idx = signal_idx.to_const_usize(nodes)
-                        .unwrap_or_else(|e| panic!(
+                        location,
+                        nodes,
+                        vars,
+                        component_signal_start,
+                        signal_node_idx,
+                        subcomponents,
+                        io_map,
+                        print_debug,
+                        call_stack,
+                    );
+                    let signal_idx = signal_idx.to_const_usize(nodes).unwrap_or_else(|e| {
+                        panic!(
                             "can't calculate signal index: {}: {}",
-                            e, call_stack.join(" -> ")));
-                    (signal_idx,
-                     template_header.as_ref().unwrap_or(&"-".to_string()).clone())
+                            e,
+                            call_stack.join(" -> ")
+                        )
+                    });
+                    (
+                        signal_idx,
+                        template_header.as_ref().unwrap_or(&"-".to_string()).clone(),
+                    )
                 }
-                LocationRule::Mapped { ref signal_code, ref indexes } => {
-                    calc_mapped_signal_idx(
-                        subcomponents, subcomponent_idx, io_map,
-                        signal_code.clone(), indexes, nodes, vars,
-                        component_signal_start, signal_node_idx, print_debug,
-                        call_stack)
-                }
+                LocationRule::Mapped {
+                    ref signal_code,
+                    ref indexes,
+                } => calc_mapped_signal_idx(
+                    subcomponents,
+                    subcomponent_idx,
+                    io_map,
+                    signal_code.clone(),
+                    indexes,
+                    nodes,
+                    vars,
+                    component_signal_start,
+                    signal_node_idx,
+                    print_debug,
+                    call_stack,
+                ),
             };
             let signal_offset = subcomponents[subcomponent_idx]
-                .as_ref().unwrap().signal_offset;
+                .as_ref()
+                .unwrap()
+                .signal_offset;
 
             if print_debug {
                 let location_rule = match load_bucket.src {
@@ -1657,15 +2449,23 @@ fn load_n(
             for i in 0..size {
                 let signal_node = signal_node_idx[signal_idx + i];
                 assert_ne!(
-                    signal_node, usize::MAX,
+                    signal_node,
+                    usize::MAX,
                     "subcomponent signal {}/{}/{} is not set yet",
-                    component_signal_start, signal_idx, i);
+                    component_signal_start,
+                    signal_idx,
+                    i
+                );
                 result.push(Var::Node(signal_node));
             }
             return result;
         }
         AddressType::Variable => {
-            let location = if let LocationRule::Indexed { location, template_header } = &load_bucket.src {
+            let location = if let LocationRule::Indexed {
+                location,
+                template_header,
+            } = &load_bucket.src
+            {
                 if template_header.is_some() {
                     panic!("template_header expected to be None");
                 }
@@ -1673,12 +2473,18 @@ fn load_n(
             } else {
                 panic!("location rule supposed to be Indexed for AddressType::Variable");
             };
-            let var_idx =
-                calc_expression(
-                    location, nodes, vars, component_signal_start,
-                    signal_node_idx, subcomponents, io_map, print_debug,
-                    call_stack)
-                .must_const_usize(nodes, call_stack);
+            let var_idx = calc_expression(
+                location,
+                nodes,
+                vars,
+                component_signal_start,
+                signal_node_idx,
+                subcomponents,
+                io_map,
+                print_debug,
+                call_stack,
+            )
+            .must_const_usize(nodes, call_stack);
 
             let mut result: Vec<Var> = Vec::with_capacity(size);
             for i in 0..size {
@@ -1688,7 +2494,7 @@ fn load_n(
                 });
             }
             result
-        },
+        }
     }
 }
 
@@ -1705,40 +2511,57 @@ fn build_unary_op_var(
 ) -> Var {
     assert_eq!(compute_bucket.stack.len(), 1);
     let a = calc_expression(
-        &compute_bucket.stack[0], nodes, vars, component_signal_start,
-        signal_node_idx, subcomponents, io_map, print_debug, call_stack);
+        &compute_bucket.stack[0],
+        nodes,
+        vars,
+        component_signal_start,
+        signal_node_idx,
+        subcomponents,
+        io_map,
+        print_debug,
+        call_stack,
+    );
 
     match &a {
-        Var::Value(ref a) => {
-            Var::Value(match compute_bucket.op {
-                OperatorType::ToAddress => a.clone(),
-                OperatorType::PrefixSub => if a.clone() == U256::ZERO { U256::ZERO } else { M - a }
-                _ => {
-                    todo!(
-                        "unary operator not implemented: {}",
-                        compute_bucket.op.to_string()
-                    );
+        Var::Value(ref a) => Var::Value(match compute_bucket.op {
+            OperatorType::ToAddress => a.clone(),
+            OperatorType::PrefixSub => {
+                if a.clone() == U256::ZERO {
+                    U256::ZERO
+                } else {
+                    M - a
                 }
-            })
-        }
+            }
+            _ => {
+                todo!(
+                    "unary operator not implemented: {}",
+                    compute_bucket.op.to_string()
+                );
+            }
+        }),
         Var::Node(node_idx) => {
-            let node = Node::UnoOp(match compute_bucket.op {
-                OperatorType::PrefixSub => UnoOperation::Neg,
-                OperatorType::ToAddress => {
-                    nodes.to_const(NodeIdx(*node_idx)).unwrap_or_else(|e| {
-                        panic!(
-                            "ToAddress argument is not a constant: {}: {}",
-                            e.to_string(), call_stack.join(" -> "));
-                    });
-                    UnoOperation::Id
-                }
-                _ => {
-                    todo!(
-                        "operator not implemented: {}",
-                        compute_bucket.op.to_string()
-                    );
-                }
-            }, *node_idx);
+            let node = Node::UnoOp(
+                match compute_bucket.op {
+                    OperatorType::PrefixSub => UnoOperation::Neg,
+                    OperatorType::ToAddress => {
+                        nodes.to_const(NodeIdx(*node_idx)).unwrap_or_else(|e| {
+                            panic!(
+                                "ToAddress argument is not a constant: {}: {}",
+                                e.to_string(),
+                                call_stack.join(" -> ")
+                            );
+                        });
+                        UnoOperation::Id
+                    }
+                    _ => {
+                        todo!(
+                            "operator not implemented: {}",
+                            compute_bucket.op.to_string()
+                        );
+                    }
+                },
+                *node_idx,
+            );
             Var::Node(nodes.push(node).0)
         }
     }
@@ -1758,31 +2581,47 @@ fn build_binary_op_var(
 ) -> Var {
     assert_eq!(compute_bucket.stack.len(), 2);
     let a = calc_expression(
-        &compute_bucket.stack[0], nodes, vars, component_signal_start,
-        signal_node_idx, subcomponents, io_map, print_debug, call_stack);
+        &compute_bucket.stack[0],
+        nodes,
+        vars,
+        component_signal_start,
+        signal_node_idx,
+        subcomponents,
+        io_map,
+        print_debug,
+        call_stack,
+    );
     let b = calc_expression(
-        &compute_bucket.stack[1], nodes, vars, component_signal_start,
-        signal_node_idx, subcomponents, io_map, print_debug, call_stack);
+        &compute_bucket.stack[1],
+        nodes,
+        vars,
+        component_signal_start,
+        signal_node_idx,
+        subcomponents,
+        io_map,
+        print_debug,
+        call_stack,
+    );
 
     let mut node_idx = |v: &Var| match v {
-        Var::Value(ref c) => {
-            nodes.push(Node::Constant(c.clone())).0
-        }
-        Var::Node(idx) => { *idx }
+        Var::Value(ref c) => nodes.push(Node::Constant(c.clone())).0,
+        Var::Node(idx) => *idx,
     };
 
     match (&a, &b) {
         (Var::Value(ref a), Var::Value(ref b)) => {
             Var::Value(match compute_bucket.op {
                 OperatorType::Mul => Operation::Mul.eval(a.clone(), b.clone()),
-                OperatorType::Div => if b.clone() == U256::ZERO {
-                    // as we are simulating a circuit execution with signals
-                    // values all equal to 0, just return 0 here in case of
-                    // division by zero
-                    U256::ZERO
-                } else {
-                    a.mul_mod(b.inv_mod(M).unwrap(), M)
-                },
+                OperatorType::Div => {
+                    if b.clone() == U256::ZERO {
+                        // as we are simulating a circuit execution with signals
+                        // values all equal to 0, just return 0 here in case of
+                        // division by zero
+                        U256::ZERO
+                    } else {
+                        a.mul_mod(b.inv_mod(M).unwrap(), M)
+                    }
+                }
                 OperatorType::Add => a.add_mod(b.clone(), M),
                 OperatorType::Sub => a.add_mod(M - b, M),
                 OperatorType::Pow => Operation::Pow.eval(a.clone(), b.clone()),
@@ -1792,7 +2631,13 @@ fn build_binary_op_var(
                 OperatorType::ShiftR => Operation::Shr.eval(a.clone(), b.clone()),
                 OperatorType::LesserEq => Operation::Leq.eval(a.clone(), b.clone()),
                 OperatorType::GreaterEq => Operation::Geq.eval(a.clone(), b.clone()),
-                OperatorType::Lesser => if a < b { U256::from(1) } else { U256::ZERO }
+                OperatorType::Lesser => {
+                    if a < b {
+                        U256::from(1)
+                    } else {
+                        U256::ZERO
+                    }
+                }
                 OperatorType::Greater => Operation::Gt.eval(a.clone(), b.clone()),
                 OperatorType::Eq(1) => Operation::Eq.eval(a.clone(), b.clone()),
                 OperatorType::NotEq => U256::from(a != b),
@@ -1811,35 +2656,39 @@ fn build_binary_op_var(
             })
         }
         _ => {
-            let node = Node::Op(match compute_bucket.op {
-                OperatorType::Mul => Operation::Mul,
-                OperatorType::Div => Operation::Div,
-                OperatorType::Add => Operation::Add,
-                OperatorType::Sub => Operation::Sub,
-                OperatorType::Pow => Operation::Pow,
-                OperatorType::IntDiv => Operation::Idiv,
-                OperatorType::Mod => Operation::Mod,
-                OperatorType::ShiftL => Operation::Shl,
-                OperatorType::ShiftR => Operation::Shr,
-                OperatorType::LesserEq => Operation::Leq,
-                OperatorType::GreaterEq => Operation::Geq,
-                OperatorType::Lesser => Operation::Lt,
-                OperatorType::Greater => Operation::Gt,
-                OperatorType::Eq(1) => Operation::Eq,
-                OperatorType::NotEq => Operation::Neq,
-                OperatorType::BoolAnd => Operation::Land,
-                OperatorType::BitOr => Operation::Bor,
-                OperatorType::BitAnd => Operation::Band,
-                OperatorType::BitXor => Operation::Bxor,
-                OperatorType::MulAddress => Operation::Mul,
-                OperatorType::AddAddress => Operation::Add,
-                _ => {
-                    todo!(
-                        "operator not implemented: {}",
-                        compute_bucket.op.to_string()
-                    );
-                }
-            }, node_idx(&a), node_idx(&b));
+            let node = Node::Op(
+                match compute_bucket.op {
+                    OperatorType::Mul => Operation::Mul,
+                    OperatorType::Div => Operation::Div,
+                    OperatorType::Add => Operation::Add,
+                    OperatorType::Sub => Operation::Sub,
+                    OperatorType::Pow => Operation::Pow,
+                    OperatorType::IntDiv => Operation::Idiv,
+                    OperatorType::Mod => Operation::Mod,
+                    OperatorType::ShiftL => Operation::Shl,
+                    OperatorType::ShiftR => Operation::Shr,
+                    OperatorType::LesserEq => Operation::Leq,
+                    OperatorType::GreaterEq => Operation::Geq,
+                    OperatorType::Lesser => Operation::Lt,
+                    OperatorType::Greater => Operation::Gt,
+                    OperatorType::Eq(1) => Operation::Eq,
+                    OperatorType::NotEq => Operation::Neq,
+                    OperatorType::BoolAnd => Operation::Land,
+                    OperatorType::BitOr => Operation::Bor,
+                    OperatorType::BitAnd => Operation::Band,
+                    OperatorType::BitXor => Operation::Bxor,
+                    OperatorType::MulAddress => Operation::Mul,
+                    OperatorType::AddAddress => Operation::Add,
+                    _ => {
+                        todo!(
+                            "operator not implemented: {}",
+                            compute_bucket.op.to_string()
+                        );
+                    }
+                },
+                node_idx(&a),
+                node_idx(&b),
+            );
             Var::Node(nodes.push(node).0)
         }
     }
@@ -1860,38 +2709,69 @@ fn calc_expression(
 ) -> Var {
     match **inst {
         Instruction::Value(ref value_bucket) => {
-            let mut vars = var_from_value_instruction_n(
-                value_bucket, nodes, 1, call_stack);
+            let mut vars = var_from_value_instruction_n(value_bucket, nodes, 1, call_stack);
             assert_eq!(vars.len(), 1, "expected one result value");
             vars.pop().unwrap()
         }
         Instruction::Load(ref load_bucket) => {
             let r = load_n(
-                load_bucket, nodes, vars, component_signal_start, signal_node_idx,
-                subcomponents, 1, io_map, print_debug, call_stack);
+                load_bucket,
+                nodes,
+                vars,
+                component_signal_start,
+                signal_node_idx,
+                subcomponents,
+                1,
+                io_map,
+                print_debug,
+                call_stack,
+            );
             assert_eq!(r.len(), 1);
             r[0].clone()
-        },
+        }
         Instruction::Compute(ref compute_bucket) => match compute_bucket.op {
-            OperatorType::Mul | OperatorType::Div | OperatorType::Add
-            | OperatorType::Sub | OperatorType::Pow | OperatorType::IntDiv
-            | OperatorType::Mod | OperatorType::ShiftL | OperatorType::ShiftR
-            | OperatorType::LesserEq | OperatorType::GreaterEq
-            | OperatorType::Lesser | OperatorType::Greater | OperatorType::Eq(1)
-            | OperatorType::NotEq | OperatorType::BoolAnd | OperatorType::BitOr
-            | OperatorType::BitAnd | OperatorType::BitXor
-            | OperatorType::MulAddress | OperatorType::AddAddress => {
-                build_binary_op_var(
-                    compute_bucket, nodes, vars, component_signal_start,
-                    signal_node_idx, subcomponents, io_map, print_debug,
-                    call_stack)
-            }
-            OperatorType::ToAddress | OperatorType::PrefixSub => {
-                build_unary_op_var(
-                    compute_bucket, nodes, vars, component_signal_start,
-                    signal_node_idx, subcomponents, io_map, print_debug,
-                    call_stack)
-            }
+            OperatorType::Mul
+            | OperatorType::Div
+            | OperatorType::Add
+            | OperatorType::Sub
+            | OperatorType::Pow
+            | OperatorType::IntDiv
+            | OperatorType::Mod
+            | OperatorType::ShiftL
+            | OperatorType::ShiftR
+            | OperatorType::LesserEq
+            | OperatorType::GreaterEq
+            | OperatorType::Lesser
+            | OperatorType::Greater
+            | OperatorType::Eq(1)
+            | OperatorType::NotEq
+            | OperatorType::BoolAnd
+            | OperatorType::BitOr
+            | OperatorType::BitAnd
+            | OperatorType::BitXor
+            | OperatorType::MulAddress
+            | OperatorType::AddAddress => build_binary_op_var(
+                compute_bucket,
+                nodes,
+                vars,
+                component_signal_start,
+                signal_node_idx,
+                subcomponents,
+                io_map,
+                print_debug,
+                call_stack,
+            ),
+            OperatorType::ToAddress | OperatorType::PrefixSub => build_unary_op_var(
+                compute_bucket,
+                nodes,
+                vars,
+                component_signal_start,
+                signal_node_idx,
+                subcomponents,
+                io_map,
+                print_debug,
+                call_stack,
+            ),
             _ => {
                 todo!(
                     "operator not implemented: {}",
@@ -1924,17 +2804,31 @@ fn calc_expression_n(
 ) -> Vec<Var> {
     if size == 1 {
         return vec![calc_expression(
-            inst, nodes, vars, component_signal_start, signal_node_idx,
-            subcomponents, io_map, print_debug, call_stack)];
+            inst,
+            nodes,
+            vars,
+            component_signal_start,
+            signal_node_idx,
+            subcomponents,
+            io_map,
+            print_debug,
+            call_stack,
+        )];
     }
 
     match **inst {
-        Instruction::Load(ref load_bucket) => {
-            load_n(
-                load_bucket, nodes, vars, component_signal_start,
-                signal_node_idx, subcomponents, size, io_map, print_debug,
-                call_stack)
-        },
+        Instruction::Load(ref load_bucket) => load_n(
+            load_bucket,
+            nodes,
+            vars,
+            component_signal_start,
+            signal_node_idx,
+            subcomponents,
+            size,
+            io_map,
+            print_debug,
+            call_stack,
+        ),
         _ => {
             panic!(
                 "instruction evaluation is not supported for multiple values: {}",
@@ -1956,13 +2850,24 @@ fn check_continue_condition(
     call_stack: &Vec<String>,
 ) -> bool {
     let val = calc_expression(
-            inst, nodes, vars, component_signal_start, signal_node_idx,
-            subcomponents, io_map, print_debug, call_stack)
-        .to_const(nodes)
-        .unwrap_or_else(
-            |e| panic!(
-                "condition is not a constant: {}: {}",
-                e, call_stack.join(" -> ")));
+        inst,
+        nodes,
+        vars,
+        component_signal_start,
+        signal_node_idx,
+        subcomponents,
+        io_map,
+        print_debug,
+        call_stack,
+    )
+    .to_const(nodes)
+    .unwrap_or_else(|e| {
+        panic!(
+            "condition is not a constant: {}: {}",
+            e,
+            call_stack.join(" -> ")
+        )
+    });
 
     val != U256::ZERO
 }
@@ -1970,7 +2875,9 @@ fn check_continue_condition(
 fn get_constants(circuit: &Circuit) -> Vec<Node> {
     let mut constants: Vec<Node> = Vec::new();
     for c in &circuit.c_producer.field_tracking {
-        constants.push(Node::Constant(U256::from_str_radix(c.as_str(), 10).unwrap()));
+        constants.push(Node::Constant(
+            U256::from_str_radix(c.as_str(), 10).unwrap(),
+        ));
     }
     constants
 }
@@ -1993,38 +2900,34 @@ fn init_input_signals(
             let inputs = deserialize_inputs(&inputs_data).unwrap();
             Some(inputs)
         }
-        None => {
-            None
-        }
+        None => None,
     };
 
     for (name, offset, len) in input_list {
         inputs_info.insert(name.clone(), (signal_values.len(), len.clone()));
         match inputs {
-            Some(ref inputs) => {
-                match inputs.get(name) {
-                    Some(values) => {
-                        if values.len() != *len {
-                            panic!(
+            Some(ref inputs) => match inputs.get(name) {
+                Some(values) => {
+                    if values.len() != *len {
+                        panic!(
                                 "input signal {} has different length in inputs file, want {}, actual {}",
                                 name, *len, values.len());
-                        }
-                        for (i, v) in values.iter().enumerate() {
-                            signal_values.push(v.clone());
-                            signal_node_idx[offset + i] = nodes.push(
-                                Node::Input(signal_values.len() - 1)).0;
-                        }
                     }
-                    None => {
-                        panic!("input signal {} is not found in inputs file", name);
+                    for (i, v) in values.iter().enumerate() {
+                        signal_values.push(v.clone());
+                        signal_node_idx[offset + i] =
+                            nodes.push(Node::Input(signal_values.len() - 1)).0;
                     }
                 }
-            }
+                None => {
+                    panic!("input signal {} is not found in inputs file", name);
+                }
+            },
             None => {
                 for i in 0..*len {
                     signal_values.push(U256::ZERO);
-                    signal_node_idx[offset + i] = nodes.push(
-                        Node::Input(signal_values.len() - 1)).0;
+                    signal_node_idx[offset + i] =
+                        nodes.push(Node::Input(signal_values.len() - 1)).0;
                 }
             }
         }
@@ -2051,8 +2954,11 @@ fn run_template(
 
     if print_debug {
         println!(
-            "Run template {}_{}: body length: {}", tmpl.name, tmpl.id,
-            tmpl.body.len());
+            "Run template {}_{}: body length: {}",
+            tmpl.name,
+            tmpl.id,
+            tmpl.body.len()
+        );
     }
 
     let mut vars: Vec<Option<Var>> = vec![None; tmpl.var_stack_depth];
@@ -2063,8 +2969,23 @@ fn run_template(
 
     for inst in &tmpl.body {
         process_instruction(
+<<<<<<< HEAD
             &inst, nodes, signal_node_idx, &mut vars, &mut components,
             templates, functions, io_map, print_debug, &call_stack, cmp);
+=======
+            &inst,
+            nodes,
+            signal_node_idx,
+            &mut vars,
+            &mut components,
+            templates,
+            functions,
+            component_signal_start,
+            io_map,
+            print_debug,
+            &call_stack,
+        );
+>>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
     }
 
     if print_debug {
@@ -2138,12 +3059,12 @@ fn parse_args() -> Args {
             usage(format!("unexpected argument: {}", args[i]).as_str());
         }
         i += 1;
-    };
+    }
 
     Args {
-        circuit_file: circuit_file.unwrap_or_else(|| { usage("missing circuit file") }),
+        circuit_file: circuit_file.unwrap_or_else(|| usage("missing circuit file")),
         inputs_file,
-        graph_file: graph_file.unwrap_or_else(|| { usage("missing graph file") }),
+        graph_file: graph_file.unwrap_or_else(|| usage("missing graph file")),
         link_libraries,
         print_unoptimized,
         print_debug,
@@ -2156,7 +3077,10 @@ fn main() {
     let version = "2.1.9";
 
     let parser_result = parser::run_parser(
-        args.circuit_file.clone(), version, args.link_libraries.clone());
+        args.circuit_file.clone(),
+        version,
+        args.link_libraries.clone(),
+    );
     let mut program_archive = match parser_result {
         Err((file_library, report_collection)) => {
             Report::print_reports(&report_collection, &file_library);
@@ -2216,8 +3140,9 @@ fn main() {
             produce_input_log: true,
             wat_flag: false,
         },
-        version)
-        .unwrap();
+        version,
+    )
+    .unwrap();
     println!("prime: {}", circuit.c_producer.prime);
     println!("prime_str: {}", circuit.c_producer.prime_str);
     println!("templates len: {}", circuit.templates.len());
@@ -2230,8 +3155,8 @@ fn main() {
     let mut nodes = Nodes::new();
     nodes.0.extend(get_constants(&circuit));
 
-    let (input_signals, input_signal_values): (InputSignalsInfo, Vec<U256>) = init_input_signals(
-        &circuit, &mut nodes, &mut signal_node_idx, args.inputs_file);
+    let (input_signals, input_signal_values): (InputSignalsInfo, Vec<U256>) =
+        init_input_signals(&circuit, &mut nodes, &mut signal_node_idx, args.inputs_file);
 
     // assert that template id is equal to index in templates list
     for (i, t) in circuit.templates.iter().enumerate() {
@@ -2249,9 +3174,22 @@ fn main() {
         component_offset: 0,
     };
     run_template(
+<<<<<<< HEAD
         &circuit.templates, &circuit.functions, &mut nodes,
         &mut signal_node_idx, circuit.c_producer.get_io_map(), args.print_debug,
         &vec![], &main_component);
+=======
+        &circuit.templates,
+        &circuit.functions,
+        main_template_id,
+        &mut nodes,
+        &mut signal_node_idx,
+        main_component_signal_start,
+        circuit.c_producer.get_io_map(),
+        args.print_debug,
+        &vec![],
+    );
+>>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
 
     for (idx, i) in signal_node_idx.iter().enumerate() {
         if *i == usize::MAX {
@@ -2260,7 +3198,8 @@ fn main() {
     }
 
     let mut witness_node_idxes = witness_list
-        .iter().enumerate()
+        .iter()
+        .enumerate()
         .map(|(idx, i)| {
             assert_ne!(*i, usize::MAX, "signal #{} is not set", idx);
             signal_node_idx[*i]
@@ -2269,16 +3208,27 @@ fn main() {
 
     if args.print_unoptimized {
         println!("Unoptimized graph:");
-        evaluate_unoptimized(&nodes, &input_signal_values, &signal_node_idx, &witness_list);
+        evaluate_unoptimized(
+            &nodes,
+            &input_signal_values,
+            &signal_node_idx,
+            &witness_list,
+        );
     }
 
-    println!("number of nodes {}, signals {}", nodes.len(), witness_node_idxes.len());
+    println!(
+        "number of nodes {}, signals {}",
+        nodes.len(),
+        witness_node_idxes.len()
+    );
 
     optimize(&mut nodes.0, &mut witness_node_idxes);
 
     println!(
         "number of nodes after optimize {}, signals {}",
-        nodes.len(), witness_node_idxes.len());
+        nodes.len(),
+        witness_node_idxes.len()
+    );
 
     let f = fs::File::create(&args.graph_file).unwrap();
     serialize_witnesscalc_graph(f, &nodes, &witness_node_idxes, &input_signals).unwrap();
@@ -2286,7 +3236,12 @@ fn main() {
     println!("circuit graph saved to file: {}", &args.graph_file)
 }
 
-fn evaluate_unoptimized(nodes: &Nodes, inputs: &[U256], signal_node_idx: &Vec<usize>, witness_signals: &[usize]) {
+fn evaluate_unoptimized(
+    nodes: &Nodes,
+    inputs: &[U256],
+    signal_node_idx: &Vec<usize>,
+    witness_signals: &[usize],
+) {
     let mut node_idx_to_signal: HashMap<usize, Vec<usize>> = HashMap::new();
     for (signal_idx, &node_idx) in signal_node_idx.iter().enumerate() {
         if node_idx == usize::MAX {
@@ -2303,7 +3258,10 @@ fn evaluate_unoptimized(nodes: &Nodes, inputs: &[U256], signal_node_idx: &Vec<us
     println!("Mapping from witness index to signal index:");
     for (witness_idx, &signal_idx) in witness_signals.iter().enumerate() {
         println!("witness {} -> {}", witness_idx, signal_idx);
-        signal_to_witness.entry(signal_idx).and_modify(|v| v.push(witness_idx)).or_insert(vec![witness_idx]);
+        signal_to_witness
+            .entry(signal_idx)
+            .and_modify(|v| v.push(witness_idx))
+            .or_insert(vec![witness_idx]);
     }
 
     let mut values = Vec::with_capacity(nodes.len());
@@ -2312,7 +3270,9 @@ fn evaluate_unoptimized(nodes: &Nodes, inputs: &[U256], signal_node_idx: &Vec<us
     for (node_idx, &node) in nodes.iter().enumerate() {
         let value = match node {
             Node::Constant(c) => c,
-            Node::MontConstant(_) => { panic!("no montgomery constant expected in unoptimized graph") }
+            Node::MontConstant(_) => {
+                panic!("no montgomery constant expected in unoptimized graph")
+            }
             Node::Input(i) => inputs[i],
             Node::Op(op, a, b) => op.eval(values[a], values[b]),
             Node::UnoOp(op, a) => op.eval(values[a]),
@@ -2323,23 +3283,35 @@ fn evaluate_unoptimized(nodes: &Nodes, inputs: &[U256], signal_node_idx: &Vec<us
         let empty_vec: Vec<usize> = Vec::new();
         let signals_for_node: &Vec<usize> = node_idx_to_signal.get(&node_idx).unwrap_or(&empty_vec);
 
-        let signal_idxs = signals_for_node.iter()
+        let signal_idxs = signals_for_node
+            .iter()
             .map(|&i| format!("{}_S", i))
-            .collect::<Vec<String>>().join(", ");
+            .collect::<Vec<String>>()
+            .join(", ");
 
         let mut witness_idxs: Vec<usize> = Vec::new();
         for &signal_idx in signals_for_node {
             witness_idxs.extend(signal_to_witness.get(&signal_idx).unwrap_or(&empty_vec));
         }
-        let output_signals = witness_idxs.iter()
+        let output_signals = witness_idxs
+            .iter()
             .map(|&i| format!("{}_W", i))
-            .collect::<Vec<String>>().join(", ");
+            .collect::<Vec<String>>()
+            .join(", ");
 
-        println!("[{:4}] {:>77} ({:>4}) ({:>4}) {:?}", node_idx, value.to_string(), signal_idxs, output_signals, node);
+        println!(
+            "[{:4}] {:>77} ({:>4}) ({:>4}) {:?}",
+            node_idx,
+            value.to_string(),
+            signal_idxs,
+            output_signals,
+            node
+        );
     }
 }
 
 fn store_subcomponent_signals(
+<<<<<<< HEAD
     cmp_address: &InstructionPointer, input_information: &InputInformation,
     nodes: &mut Nodes, tmpl_vars: &mut Vec<Option<Var>>,
     signal_node_idx: &mut Vec<usize>,
@@ -2348,6 +3320,24 @@ fn store_subcomponent_signals(
     size: usize, templates: &Vec<TemplateCode>, functions: &Vec<FunctionCode>,
     print_debug: bool, call_stack: &Vec<String>, cmp: &ComponentInstance) {
 
+=======
+    cmp_address: &InstructionPointer,
+    input_information: &InputInformation,
+    nodes: &mut Nodes,
+    tmpl_vars: &mut Vec<Option<Var>>,
+    component_signal_start: usize,
+    signal_node_idx: &mut Vec<usize>,
+    subcomponents: &mut Vec<Option<ComponentInstance>>,
+    io_map: &TemplateInstanceIOMap,
+    src_node_idxs: &Vec<usize>,
+    dest: &LocationRule,
+    size: usize,
+    templates: &Vec<TemplateCode>,
+    functions: &Vec<FunctionCode>,
+    print_debug: bool,
+    call_stack: &Vec<String>,
+) {
+>>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
     let input_status: &StatusInput;
     if let InputInformation::Input { ref status } = input_information {
         input_status = status;
@@ -2355,17 +3345,33 @@ fn store_subcomponent_signals(
         panic!("incorrect input information for subcomponent signal");
     }
 
+<<<<<<< HEAD
     let subcomponent_idx =
         calc_expression(
             cmp_address, nodes, tmpl_vars, cmp.signal_offset,
             signal_node_idx, subcomponents, io_map, print_debug, call_stack)
         .must_const_usize(nodes, call_stack);
+=======
+    let subcomponent_idx = calc_expression(
+        cmp_address,
+        nodes,
+        tmpl_vars,
+        component_signal_start,
+        signal_node_idx,
+        subcomponents,
+        io_map,
+        print_debug,
+        call_stack,
+    )
+    .must_const_usize(nodes, call_stack);
+>>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
 
     let (signal_idx, template_header) = match dest {
         LocationRule::Indexed {
             ref location,
             ref template_header,
         } => {
+<<<<<<< HEAD
             let signal_idx =
                 calc_expression(
                     location, nodes, tmpl_vars, cmp.signal_offset,
@@ -2379,12 +3385,53 @@ fn store_subcomponent_signals(
                 subcomponents, subcomponent_idx, io_map,
                 signal_code.clone(), indexes, nodes, tmpl_vars,
                 cmp.signal_offset, signal_node_idx, print_debug, call_stack)
+=======
+            let signal_idx = calc_expression(
+                location,
+                nodes,
+                tmpl_vars,
+                component_signal_start,
+                signal_node_idx,
+                subcomponents,
+                io_map,
+                print_debug,
+                call_stack,
+            )
+            .must_const_usize(nodes, call_stack);
+            (
+                signal_idx,
+                template_header.as_ref().unwrap_or(&"-".to_string()).clone(),
+            )
+>>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
         }
+        LocationRule::Mapped {
+            ref signal_code,
+            ref indexes,
+        } => calc_mapped_signal_idx(
+            subcomponents,
+            subcomponent_idx,
+            io_map,
+            signal_code.clone(),
+            indexes,
+            nodes,
+            tmpl_vars,
+            component_signal_start,
+            signal_node_idx,
+            print_debug,
+            call_stack,
+        ),
     };
 
+<<<<<<< HEAD
     let sub_cmp = subcomponents[subcomponent_idx]
         .as_mut().unwrap();
     let signal_offset = sub_cmp.signal_offset;
+=======
+    let signal_offset = subcomponents[subcomponent_idx]
+        .as_ref()
+        .unwrap()
+        .signal_offset;
+>>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
 
     if print_debug {
         let location = match dest {
@@ -2404,7 +3451,19 @@ fn store_subcomponent_signals(
         }
         signal_node_idx[signal_idx + i] = src_node_idxs[i];
     }
+<<<<<<< HEAD
     sub_cmp.number_of_inputs -= size;
+=======
+    subcomponents[subcomponent_idx]
+        .as_mut()
+        .unwrap()
+        .number_of_inputs -= size;
+
+    let number_of_inputs = subcomponents[subcomponent_idx]
+        .as_ref()
+        .unwrap()
+        .number_of_inputs;
+>>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
 
     let run_component = match input_status {
         StatusInput::Last => {
@@ -2427,6 +3486,7 @@ fn store_subcomponent_signals(
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
     use super::*;
 
     #[test]

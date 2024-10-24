@@ -18,7 +18,7 @@ serde = { version = "1.0.213", features = ["derive"] }
 serde_json = "1.0.132"
 wtns-file = "0.1.5"
 lazy_static = "1.4.0"
-libc = "0.2.161"
+libc = "0.2"
 prost = "0.13.3"
 num-bigint = "0.4.6"
 
