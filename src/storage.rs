@@ -312,6 +312,7 @@ mod tests {
     use crate::graph::{Operation, TresOperation, UnoOperation};
     use core::str::FromStr;
     use super::*;
+    use byteorder::ByteOrder;
 
     #[test]
     fn test_read_message() {
@@ -419,7 +420,7 @@ mod tests {
 
     #[test]
     fn test_deserialize_inputs() {
-        let nodes = vec![
+        let nodes: Vec<crate::graph::Node> = vec![
             crate::graph::Node::Input(0),
             crate::graph::Node::MontConstant(Fr::from_str("1").unwrap()),
             crate::graph::Node::UnoOp(UnoOperation::Id, 4),
