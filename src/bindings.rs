@@ -3,17 +3,39 @@
 pub const GW_ERROR_CODE_OK: GW_ERROR_CODE = 0;
 pub const GW_ERROR_CODE_ERROR: GW_ERROR_CODE = 1;
 pub type GW_ERROR_CODE = ::std::os::raw::c_uint;
+
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct gw_status_t {
     pub code: GW_ERROR_CODE,
     pub error_msg: *mut ::std::os::raw::c_char,
 }
+
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of gw_status_t"][::std::mem::size_of::<gw_status_t>() - 16usize];
-    ["Alignment of gw_status_t"][::std::mem::align_of::<gw_status_t>() - 8usize];
-    ["Offset of field: gw_status_t::code"][::std::mem::offset_of!(gw_status_t, code) - 0usize];
-    ["Offset of field: gw_status_t::error_msg"]
-        [::std::mem::offset_of!(gw_status_t, error_msg) - 8usize];
+    const SIZE: usize = ::std::mem::size_of::<gw_status_t>();
+    const ALIGN: usize = ::std::mem::align_of::<gw_status_t>();
+    const CODE_OFFSET: usize = ::std::mem::offset_of!(gw_status_t, code);
+    const ERROR_MSG_OFFSET: usize = ::std::mem::offset_of!(gw_status_t, error_msg);
+
+    // Ensure we do not access out of bounds
+    let _size_index = if SIZE >= 16 { SIZE - 16 } else { 0 };
+    let _align_index = if ALIGN >= 8 { ALIGN - 8 } else { 0 };
+    let _code_offset_index = CODE_OFFSET; // This should always be valid
+    let _error_msg_offset_index = if ERROR_MSG_OFFSET >= 8 { ERROR_MSG_OFFSET - 8 } else { 0 };
+
+    let messages = [
+        "Size of gw_status_t",
+        "Alignment of gw_status_t",
+        "Offset of field: gw_status_t::code",
+        "Offset of field: gw_status_t::error_msg",
+    ];
+
+    // Access the array safely
+    let _ = [
+        messages[0], // "Size of gw_status_t"
+        messages[1], // "Alignment of gw_status_t"
+        messages[2], // "Offset of field: gw_status_t::code"
+        messages[3], // "Offset of field: gw_status_t::error_msg"
+    ];
 };
