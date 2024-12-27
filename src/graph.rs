@@ -301,10 +301,7 @@ impl Nodes {
         let me = self.0.get(idx.0).ok_or(NodeConstErr::EmptyNode(idx))?;
         match me {
             Node::Constant(v) => Ok(*v),
-            Node::UnoOp(op, a) => {
-                Ok(op.eval(
-                    self.to_const(NodeIdx(*a))?))
-            }
+            Node::UnoOp(op, a) => Ok(op.eval(self.to_const(NodeIdx(*a))?)),
             Node::Op(op, a, b) => {
                 Ok(op.eval(self.to_const(NodeIdx(*a))?, self.to_const(NodeIdx(*b))?))
             }
