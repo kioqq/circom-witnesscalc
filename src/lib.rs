@@ -6,17 +6,18 @@ mod field;
 pub mod graph;
 pub mod storage;
 
-use crate::field::M;
-use crate::graph::Node;
-use crate::storage::deserialize_witnesscalc_graph;
+use std::collections::HashMap;
+use std::ffi::{c_void, c_char, c_int, CStr};
+use std::slice::from_raw_parts;
 use ruint::aliases::U256;
 use ruint::ParseError;
-use std::collections::HashMap;
-use std::ffi::{c_char, c_int, c_void, CStr};
-use std::slice::from_raw_parts;
+use crate::graph::Node;
 use wtns_file::FieldElement;
+use crate::field::M;
+use crate::storage::deserialize_witnesscalc_graph;
 
 pub type InputSignalsInfo = HashMap<String, (usize, usize)>;
+
 
 pub mod proto {
     // include!(concat!(env!("OUT_DIR"), "/circom_witnesscalc.proto.rs"));
@@ -32,19 +33,9 @@ fn prepare_status(status: *mut gw_status_t, code: GW_ERROR_CODE, error_msg: &str
         let bs = error_msg.as_bytes();
         unsafe {
             (*status).code = code;
-<<<<<<< HEAD
             (*status).error_msg = libc::malloc(bs.len()+1) as *mut c_char;
             libc::memcpy((*status).error_msg as *mut c_void, bs.as_ptr() as *mut c_void, bs.len());
             *((*status).error_msg.add(bs.len())) = 0;
-=======
-            (*status).error_msg = libc::malloc(bs.len() + 1) as *mut c_char;
-            libc::memcpy(
-                (*status).error_msg as *mut c_void,
-                bs.as_ptr() as *mut c_void,
-                bs.len(),
-            );
-            *(*status).error_msg.add(bs.len()) = 0;
->>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
         }
     }
 }
@@ -134,22 +125,12 @@ pub unsafe extern "C" fn gw_calc_witness(
 
     prepare_status(status, GW_ERROR_CODE_ERROR, "test error");
 
-<<<<<<< HEAD
-=======
-    println!("OK");
-
->>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
     0
 }
 
 // create a wtns file bytes from witness (array of field elements)
 pub fn wtns_from_witness(witness: Vec<U256>) -> Vec<u8> {
-<<<<<<< HEAD
     let vec_witness: Vec<FieldElement<32>> = witness.iter().map(u256_to_field_element).collect();
-=======
-    let vec_witness: Vec<FieldElement<32>> =
-        witness.iter().map(u256_to_field_element).collect();
->>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
     let mut buf = Vec::new();
     let mut wtns_f = wtns_file::WtnsFile::from_vec(vec_witness, u256_to_field_element(&M));
     wtns_f.version = 2;
@@ -188,15 +169,10 @@ fn get_inputs_size(nodes: &[Node]) -> usize {
 }
 
 fn populate_inputs(
-<<<<<<< HEAD
-    input_list: &HashMap<String, Vec<U256>>, inputs_info: &InputSignalsInfo,
-    input_buffer: &mut [U256]) {
-=======
     input_list: &HashMap<String, Vec<U256>>,
     inputs_info: &InputSignalsInfo,
     input_buffer: &mut [U256],
 ) {
->>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
     for (key, value) in input_list {
         let (offset, len) = inputs_info[key];
         if len != value.len() {
@@ -304,30 +280,7 @@ pub fn deserialize_inputs(inputs_data: &[u8]) -> Result<HashMap<String, Vec<U256
                 inputs.insert(k.clone(), vec![i]);
             }
             serde_json::Value::Array(ss) => {
-<<<<<<< HEAD
                 let vals: Vec<U256> = flatten_array(k.as_str(), &ss)?;
-=======
-                let mut vals: Vec<U256> = Vec::with_capacity(ss.len());
-                for v in &ss {
-                    let i = match v {
-                        serde_json::Value::String(s) => U256::from_str_radix(s.as_str(), 10)?,
-                        serde_json::Value::Number(n) => {
-                            if !n.is_u64() {
-                                return Err(Error::InputsUnmarshal(
-                                    "signal value is not a positive integer".to_string(),
-                                ));
-                            }
-                            U256::from(n.as_u64().unwrap())
-                        }
-                        _ => {
-                            return Err(Error::InputsUnmarshal(
-                                format!("inputs must be a string: {}", k).to_string(),
-                            ));
-                        }
-                    };
-                    vals.push(i);
-                }
->>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
                 inputs.insert(k.clone(), vals);
             }
             _ => {
@@ -342,17 +295,12 @@ pub fn deserialize_inputs(inputs_data: &[u8]) -> Result<HashMap<String, Vec<U256
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use crate::proto::InputNode;
     use prost::Message;
     use ruint::aliases::U256;
-<<<<<<< HEAD
-    use ruint::{uint};
-    use crate::flatten_array;
-    use crate::proto::InputNode;
-=======
     use ruint::uint;
-    use std::collections::HashMap;
->>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
+    use crate::flatten_array;
 
     #[test]
     fn test_ok() {
@@ -395,7 +343,6 @@ mod tests {
         let v = i.encode_to_vec();
         println!("{:?}", v.len());
     }
-<<<<<<< HEAD
 
     #[test]
     fn test_flatten_array() {
@@ -421,6 +368,3 @@ mod tests {
     }
 
 }
-=======
-}
->>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)

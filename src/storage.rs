@@ -1,10 +1,10 @@
-use crate::graph::{Operation, TresOperation, UnoOperation};
-use crate::InputSignalsInfo;
+use std::io::{Write, Read};
 use ark_bn254::Fr;
-use ark_ff::PrimeField;
+use ark_ff::{PrimeField};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use prost::Message;
-use std::io::{Read, Write};
+use crate::graph::{Operation, TresOperation, UnoOperation};
+use crate::InputSignalsInfo;
 
 // format of the wtns.graph file:
 // + magic line: wtns.graph.001
@@ -34,19 +34,14 @@ impl From<crate::proto::Node> for crate::graph::Node {
             crate::proto::node::Node::DuoOp(duo_op_node) => {
                 let op = crate::proto::DuoOp::try_from(duo_op_node.op).unwrap();
                 crate::graph::Node::Op(
-                    op.into(),
-                    duo_op_node.a_idx as usize,
-                    duo_op_node.b_idx as usize,
-                )
+                    op.into(), duo_op_node.a_idx as usize,
+                    duo_op_node.b_idx as usize)
             }
             crate::proto::node::Node::TresOp(tres_op_node) => {
                 let op = crate::proto::TresOp::try_from(tres_op_node.op).unwrap();
                 crate::graph::Node::TresOp(
-                    op.into(),
-                    tres_op_node.a_idx as usize,
-                    tres_op_node.b_idx as usize,
-                    tres_op_node.c_idx as usize,
-                )
+                    op.into(), tres_op_node.a_idx as usize,
+                    tres_op_node.b_idx as usize, tres_op_node.c_idx as usize)
             }
         }
     }
@@ -56,13 +51,8 @@ impl From<&crate::graph::Node> for crate::proto::node::Node {
     fn from(node: &crate::graph::Node) -> Self {
         match node {
             crate::graph::Node::Input(i) => {
-<<<<<<< HEAD
                 crate::proto::node::Node::Input (crate::proto::InputNode {
                     idx: *i as u32
-=======
-                crate::proto::node::Node::Input(crate::proto::InputNode {
-                    idx: *i as u32,
->>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
                 })
             }
             crate::graph::Node::Constant(_) => {
@@ -70,7 +60,6 @@ impl From<&crate::graph::Node> for crate::proto::node::Node {
             }
             crate::graph::Node::UnoOp(op, a) => {
                 let op = crate::proto::UnoOp::from(op);
-<<<<<<< HEAD
                 crate::proto::node::Node::UnoOp(
                     crate::proto::UnoOpNode {
                         op: op as i32,
@@ -96,34 +85,6 @@ impl From<&crate::graph::Node> for crate::proto::node::Node {
                 let i = crate::proto::BigUInt { value_le: bi.to_bytes_le() };
                 crate::proto::node::Node::Constant(
                     crate::proto::ConstantNode { value: Some(i) })
-=======
-                crate::proto::node::Node::UnoOp(crate::proto::UnoOpNode {
-                    op: op as i32,
-                    a_idx: *a as u32,
-                })
-            }
-            crate::graph::Node::Op(op, a, b) => {
-                crate::proto::node::Node::DuoOp(crate::proto::DuoOpNode {
-                    op: crate::proto::DuoOp::from(op) as i32,
-                    a_idx: *a as u32,
-                    b_idx: *b as u32,
-                })
-            }
-            crate::graph::Node::TresOp(op, a, b, c) => {
-                crate::proto::node::Node::TresOp(crate::proto::TresOpNode {
-                    op: crate::proto::TresOp::from(op) as i32,
-                    a_idx: *a as u32,
-                    b_idx: *b as u32,
-                    c_idx: *c as u32,
-                })
-            }
-            crate::graph::Node::MontConstant(c) => {
-                let bi = Into::<num_bigint::BigUint>::into(*c);
-                let i = crate::proto::BigUInt {
-                    value_le: bi.to_bytes_le(),
-                };
-                crate::proto::node::Node::Constant(crate::proto::ConstantNode { value: Some(i) })
->>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
             }
         }
     }
@@ -174,11 +135,9 @@ impl From<crate::proto::TresOp> for TresOperation {
 }
 
 pub fn serialize_witnesscalc_graph<T: Write>(
-    mut w: T,
-    nodes: &Vec<crate::graph::Node>,
-    witness_signals: &[usize],
-    input_signals: &InputSignalsInfo,
-) -> std::io::Result<()> {
+    mut w: T, nodes: &Vec<crate::graph::Node>, witness_signals: &Vec<usize>,
+    input_signals: &InputSignalsInfo) -> std::io::Result<()> {
+
     let mut ptr = 0usize;
     w.write_all(WITNESSCALC_GRAPH_MAGIC).unwrap();
     ptr += WITNESSCALC_GRAPH_MAGIC.len();
@@ -187,28 +146,22 @@ pub fn serialize_witnesscalc_graph<T: Write>(
     ptr += 8;
 
     let metadata = crate::proto::GraphMetadata {
-        witness_signals: witness_signals
-            .iter()
-            .map(|x| *x as u32)
-            .collect::<Vec<u32>>(),
-        inputs: input_signals
-            .iter()
-            .map(|(k, v)| {
-                let sig = crate::proto::SignalDescription {
-                    offset: v.0 as u32,
-                    len: v.1 as u32,
-                };
-                (k.clone(), sig)
-            })
-            .collect(),
+        witness_signals: witness_signals.iter().map(|x| *x as u32).collect::<Vec<u32>>(),
+        inputs: input_signals.iter().map(|(k, v)| {
+            let sig = crate::proto::SignalDescription {
+                offset: v.0 as u32,
+                len: v.1 as u32 };
+            (k.clone(), sig)
+        }).collect()
     };
 
     // capacity of buf should be enough to hold the largest message + 10 bytes
     // of varint length
-    let mut buf = Vec::with_capacity(metadata.encoded_len() + MAX_VARINT_LENGTH);
+    let mut buf =
+        Vec::with_capacity(metadata.encoded_len() + MAX_VARINT_LENGTH);
 
     for node in nodes {
-        let node_pb = crate::proto::Node {
+        let node_pb = crate::proto::Node{
             node: Some(crate::proto::node::Node::from(node)),
         };
 
@@ -248,17 +201,13 @@ fn read_message_length<R: Read>(rw: &mut WriteBackReader<R>) -> std::io::Result<
     Ok(len_delimiter)
 }
 
-fn read_message<R: Read, M: Message + std::default::Default>(
-    rw: &mut WriteBackReader<R>,
-) -> std::io::Result<M> {
+fn read_message<R: Read, M: Message + std::default::Default>(rw: &mut WriteBackReader<R>) -> std::io::Result<M> {
     let ln = read_message_length(rw)?;
     let mut buf = vec![0u8; ln];
     let bytes_read = rw.read(&mut buf)?;
     if bytes_read != ln {
         return Err(std::io::Error::new(
-            std::io::ErrorKind::UnexpectedEof,
-            "Unexpected EOF",
-        ));
+            std::io::ErrorKind::UnexpectedEof, "Unexpected EOF"));
     }
 
     let msg = prost::Message::decode(&buf[..])?;
@@ -267,8 +216,8 @@ fn read_message<R: Read, M: Message + std::default::Default>(
 }
 
 pub fn deserialize_witnesscalc_graph(
-    r: impl Read,
-) -> std::io::Result<(Vec<crate::graph::Node>, Vec<usize>, InputSignalsInfo)> {
+    r: impl Read) -> std::io::Result<(Vec<crate::graph::Node>, Vec<usize>, InputSignalsInfo)> {
+
     let mut br = WriteBackReader::new(r);
     let mut magic = [0u8; WITNESSCALC_GRAPH_MAGIC.len()];
 
@@ -276,9 +225,7 @@ pub fn deserialize_witnesscalc_graph(
 
     if !magic.eq(WITNESSCALC_GRAPH_MAGIC) {
         return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            "Invalid magic",
-        ));
+            std::io::ErrorKind::InvalidData, "Invalid magic"));
     }
 
     let mut nodes = Vec::new();
@@ -291,16 +238,15 @@ pub fn deserialize_witnesscalc_graph(
 
     let md: crate::proto::GraphMetadata = read_message(&mut br)?;
 
-    let witness_signals = md
-        .witness_signals
+    let witness_signals = md.witness_signals
         .iter()
         .map(|x| *x as usize)
         .collect::<Vec<usize>>();
 
-    let input_signals = md
-        .inputs
-        .iter()
-        .map(|(k, v)| (k.clone(), (v.offset as usize, v.len as usize)))
+    let input_signals = md.inputs.iter()
+        .map(|(k, v)| {
+            (k.clone(), (v.offset as usize, v.len as usize))
+        })
         .collect::<InputSignalsInfo>();
 
     Ok((nodes, witness_signals, input_signals))
@@ -311,7 +257,7 @@ struct WriteBackReader<R: Read> {
     buffer: Vec<u8>,
 }
 
-impl<R: Read> WriteBackReader<R> {
+impl <R: Read> WriteBackReader<R> {
     fn new(reader: R) -> Self {
         WriteBackReader {
             reader,
@@ -323,18 +269,14 @@ impl<R: Read> WriteBackReader<R> {
 impl<R: Read> Read for WriteBackReader<R> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         if buf.is_empty() {
-<<<<<<< HEAD
             return Ok(0)
-=======
-            return Ok(0);
->>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
         }
 
         let mut n = 0usize;
 
         if !self.buffer.is_empty() {
             n = std::cmp::min(buf.len(), self.buffer.len());
-            self.buffer[self.buffer.len() - n..]
+            self.buffer[self.buffer.len()-n..]
                 .iter()
                 .rev()
                 .enumerate()
@@ -370,33 +312,24 @@ impl<R: Read> Write for WriteBackReader<R> {
 
 #[cfg(test)]
 mod tests {
-<<<<<<< HEAD
     use std::collections::HashMap;
     use crate::graph::{Operation, TresOperation, UnoOperation};
     use core::str::FromStr;
     use byteorder::ByteOrder;
-=======
->>>>>>> 9f8f8a3 (chore: clean fmt/clippy and update deps)
     use super::*;
-    use crate::graph::{Operation, TresOperation, UnoOperation};
-    use byteorder::ByteOrder;
-    use core::str::FromStr;
-    use std::collections::HashMap;
 
     #[test]
     fn test_read_message() {
         let mut buf = Vec::new();
         let n1 = crate::proto::Node {
-            node: Some(crate::proto::node::Node::Input(crate::proto::InputNode {
-                idx: 1,
-            })),
+            node: Some(crate::proto::node::Node::Input(
+                crate::proto::InputNode { idx: 1 }))
         };
         n1.encode_length_delimited(&mut buf).unwrap();
 
         let n2 = crate::proto::Node {
-            node: Some(crate::proto::node::Node::Input(crate::proto::InputNode {
-                idx: 2,
-            })),
+            node: Some(crate::proto::node::Node::Input(
+                crate::proto::InputNode { idx: 2 }))
         };
         n2.encode_length_delimited(&mut buf).unwrap();
 
@@ -417,35 +350,31 @@ mod tests {
     fn test_read_message_variant() {
         let nodes = vec![
             crate::proto::Node {
-                node: Some(crate::proto::node::Node::from(&crate::graph::Node::Input(
-                    0,
-                ))),
+                node: Some(
+                    crate::proto::node::Node::from(&crate::graph::Node::Input(0))
+                )
             },
             crate::proto::Node {
-                node: Some(crate::proto::node::Node::from(
-                    &crate::graph::Node::MontConstant(Fr::from_str("1").unwrap()),
-                )),
+                node: Some(
+                    crate::proto::node::Node::from(
+                        &crate::graph::Node::MontConstant(
+                            Fr::from_str("1").unwrap()))
+                )
             },
             crate::proto::Node {
-                node: Some(crate::proto::node::Node::from(&crate::graph::Node::UnoOp(
-                    UnoOperation::Id,
-                    4,
-                ))),
+                node: Some(
+                    crate::proto::node::Node::from(&crate::graph::Node::UnoOp(UnoOperation::Id, 4))
+                )
             },
             crate::proto::Node {
-                node: Some(crate::proto::node::Node::from(&crate::graph::Node::Op(
-                    Operation::Mul,
-                    5,
-                    6,
-                ))),
+                node: Some(
+                    crate::proto::node::Node::from(&crate::graph::Node::Op(Operation::Mul, 5, 6))
+                )
             },
             crate::proto::Node {
-                node: Some(crate::proto::node::Node::from(&crate::graph::Node::TresOp(
-                    TresOperation::TernCond,
-                    7,
-                    8,
-                    9,
-                ))),
+                node: Some(
+                    crate::proto::node::Node::from(&crate::graph::Node::TresOp(TresOperation::TernCond, 7, 8, 9))
+                )
             },
         ];
 
@@ -495,7 +424,7 @@ mod tests {
 
     #[test]
     fn test_deserialize_inputs() {
-        let nodes: Vec<crate::graph::Node> = vec![
+        let nodes = vec![
             crate::graph::Node::Input(0),
             crate::graph::Node::MontConstant(Fr::from_str("1").unwrap()),
             crate::graph::Node::UnoOp(UnoOperation::Id, 4),
@@ -529,18 +458,12 @@ mod tests {
 
         let metadata_want = crate::proto::GraphMetadata {
             witness_signals: vec![4, 1],
-            inputs: input_signals
-                .iter()
-                .map(|(k, v)| {
-                    (
-                        k.clone(),
-                        crate::proto::SignalDescription {
-                            offset: v.0 as u32,
-                            len: v.1 as u32,
-                        },
-                    )
+            inputs: input_signals.iter().map(|(k, v)| {
+                (k.clone(), crate::proto::SignalDescription {
+                    offset: v.0 as u32,
+                    len: v.1 as u32
                 })
-                .collect(),
+            }).collect()
         };
 
         assert_eq!(metadata, metadata_want);
