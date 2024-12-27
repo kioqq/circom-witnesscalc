@@ -18,6 +18,7 @@ use wtns_file::FieldElement;
 
 pub type InputSignalsInfo = HashMap<String, (usize, usize)>;
 
+
 pub mod proto {
     // include!(concat!(env!("OUT_DIR"), "/circom_witnesscalc.proto.rs"));
 
@@ -32,13 +33,9 @@ fn prepare_status(status: *mut gw_status_t, code: GW_ERROR_CODE, error_msg: &str
         let bs = error_msg.as_bytes();
         unsafe {
             (*status).code = code;
-            (*status).error_msg = libc::malloc(bs.len() + 1) as *mut c_char;
-            libc::memcpy(
-                (*status).error_msg as *mut c_void,
-                bs.as_ptr() as *mut c_void,
-                bs.len(),
-            );
-            *(*status).error_msg.add(bs.len()) = 0;
+            (*status).error_msg = libc::malloc(bs.len()+1) as *mut c_char;
+            libc::memcpy((*status).error_msg as *mut c_void, bs.as_ptr() as *mut c_void, bs.len());
+            *((*status).error_msg.add(bs.len())) = 0;
         }
     }
 }
@@ -128,15 +125,12 @@ pub unsafe extern "C" fn gw_calc_witness(
 
     prepare_status(status, GW_ERROR_CODE_ERROR, "test error");
 
-    println!("OK");
-
     0
 }
 
 // create a wtns file bytes from witness (array of field elements)
 pub fn wtns_from_witness(witness: Vec<U256>) -> Vec<u8> {
-    let vec_witness: Vec<FieldElement<32>> =
-        witness.iter().map(u256_to_field_element).collect();
+    let vec_witness: Vec<FieldElement<32>> = witness.iter().map(u256_to_field_element).collect();
     let mut buf = Vec::new();
     let mut wtns_f = wtns_file::WtnsFile::from_vec(vec_witness, u256_to_field_element(&M));
     wtns_f.version = 2;
@@ -184,7 +178,7 @@ fn populate_inputs(
         if len != value.len() {
             panic!("Invalid input length for {}", key);
         }
-        println!("input {}, offset {}, len {}", key, offset, len);
+        // println!("input {}, offset {}, len {}", key, offset, len);
 
         for (i, v) in value.iter().enumerate() {
             input_buffer[offset + i] = *v;
@@ -216,6 +210,48 @@ impl From<ParseError> for Error {
     }
 }
 
+fn calc_len(vs: &Vec<serde_json::Value>) -> usize {
+    let mut len = vs.len();
+
+    for v in vs {
+        if let serde_json::Value::Array(arr) = v {
+            len += calc_len(arr)-1;
+        }
+    }
+
+    len
+}
+
+fn flatten_array(
+    key: &str, vs: &Vec<serde_json::Value>) -> Result<Vec<U256>, Error> {
+
+    let mut vals: Vec<U256> = Vec::with_capacity(calc_len(vs));
+
+    for v in vs {
+        match v {
+            serde_json::Value::String(s) => {
+                vals.push(U256::from_str_radix(s.as_str(),10)?);
+            }
+            serde_json::Value::Number(n) => {
+                vals.push(U256::from(
+                    n.as_u64()
+                        .ok_or(Error::InputsUnmarshal(format!(
+                            "signal value is not a positive integer: {}",
+                            key).to_string()))?));
+            }
+            serde_json::Value::Array(arr) => {
+                vals.extend_from_slice(flatten_array(key, arr)?.as_slice());
+            }
+            _ => {
+                return Err(Error::InputsUnmarshal(
+                    format!("inputs must be a string: {}", key).to_string()));
+            }
+        };
+
+    }
+    Ok(vals)
+}
+
 pub fn deserialize_inputs(inputs_data: &[u8]) -> Result<HashMap<String, Vec<U256>>, Error> {
     let v: serde_json::Value = serde_json::from_slice(inputs_data).unwrap();
 
@@ -244,26 +280,7 @@ pub fn deserialize_inputs(inputs_data: &[u8]) -> Result<HashMap<String, Vec<U256
                 inputs.insert(k.clone(), vec![i]);
             }
             serde_json::Value::Array(ss) => {
-                let mut vals: Vec<U256> = Vec::with_capacity(ss.len());
-                for v in &ss {
-                    let i = match v {
-                        serde_json::Value::String(s) => U256::from_str_radix(s.as_str(), 10)?,
-                        serde_json::Value::Number(n) => {
-                            if !n.is_u64() {
-                                return Err(Error::InputsUnmarshal(
-                                    "signal value is not a positive integer".to_string(),
-                                ));
-                            }
-                            U256::from(n.as_u64().unwrap())
-                        }
-                        _ => {
-                            return Err(Error::InputsUnmarshal(
-                                format!("inputs must be a string: {}", k).to_string(),
-                            ));
-                        }
-                    };
-                    vals.push(i);
-                }
+                let vals: Vec<U256> = flatten_array(k.as_str(), &ss)?;
                 inputs.insert(k.clone(), vals);
             }
             _ => {
@@ -278,11 +295,12 @@ pub fn deserialize_inputs(inputs_data: &[u8]) -> Result<HashMap<String, Vec<U256
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use crate::proto::InputNode;
     use prost::Message;
     use ruint::aliases::U256;
     use ruint::uint;
-    use std::collections::HashMap;
+    use crate::flatten_array;
 
     #[test]
     fn test_ok() {
@@ -325,4 +343,28 @@ mod tests {
         let v = i.encode_to_vec();
         println!("{:?}", v.len());
     }
+
+    #[test]
+    fn test_flatten_array() {
+        let data = r#"["123", "456", 100500, [1, 2]]"#;
+        let v = serde_json::from_str(data).unwrap();
+        let res = flatten_array("key1", &v).unwrap();
+
+        let want = vec![uint!(123_U256), uint!(456_U256), uint!(100500_U256), uint!(1_U256), uint!(2_U256)];
+        assert_eq!(want, res);
+    }
+
+    #[test]
+    fn test_calc_len() {
+        let data = r#"["123", "456", 100500]"#;
+        let v = serde_json::from_str(data).unwrap();
+        let l = super::calc_len(&v);
+        assert_eq!(l, 3);
+
+        let data = r#"["123", ["456", true], 100500]"#;
+        let v = serde_json::from_str(data).unwrap();
+        let l = super::calc_len(&v);
+        assert_eq!(l, 4);
+    }
+
 }

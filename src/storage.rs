@@ -56,8 +56,8 @@ impl From<&crate::graph::Node> for crate::proto::node::Node {
     fn from(node: &crate::graph::Node) -> Self {
         match node {
             crate::graph::Node::Input(i) => {
-                crate::proto::node::Node::Input(crate::proto::InputNode {
-                    idx: *i as u32,
+                crate::proto::node::Node::Input (crate::proto::InputNode {
+                    idx: *i as u32
                 })
             }
             crate::graph::Node::Constant(_) => {
@@ -65,32 +65,31 @@ impl From<&crate::graph::Node> for crate::proto::node::Node {
             }
             crate::graph::Node::UnoOp(op, a) => {
                 let op = crate::proto::UnoOp::from(op);
-                crate::proto::node::Node::UnoOp(crate::proto::UnoOpNode {
-                    op: op as i32,
-                    a_idx: *a as u32,
-                })
+                crate::proto::node::Node::UnoOp(
+                    crate::proto::UnoOpNode {
+                        op: op as i32,
+                        a_idx: *a as u32 })
             }
             crate::graph::Node::Op(op, a, b) => {
-                crate::proto::node::Node::DuoOp(crate::proto::DuoOpNode {
-                    op: crate::proto::DuoOp::from(op) as i32,
-                    a_idx: *a as u32,
-                    b_idx: *b as u32,
-                })
+                crate::proto::node::Node::DuoOp(
+                    crate::proto::DuoOpNode {
+                        op: crate::proto::DuoOp::from(op) as i32,
+                        a_idx: *a as u32,
+                        b_idx: *b as u32 })
             }
             crate::graph::Node::TresOp(op, a, b, c) => {
-                crate::proto::node::Node::TresOp(crate::proto::TresOpNode {
-                    op: crate::proto::TresOp::from(op) as i32,
-                    a_idx: *a as u32,
-                    b_idx: *b as u32,
-                    c_idx: *c as u32,
-                })
+                crate::proto::node::Node::TresOp(
+                    crate::proto::TresOpNode {
+                        op: crate::proto::TresOp::from(op) as i32,
+                        a_idx: *a as u32,
+                        b_idx: *b as u32,
+                        c_idx: *c as u32 })
             }
             crate::graph::Node::MontConstant(c) => {
                 let bi = Into::<num_bigint::BigUint>::into(*c);
-                let i = crate::proto::BigUInt {
-                    value_le: bi.to_bytes_le(),
-                };
-                crate::proto::node::Node::Constant(crate::proto::ConstantNode { value: Some(i) })
+                let i = crate::proto::BigUInt { value_le: bi.to_bytes_le() };
+                crate::proto::node::Node::Constant(
+                    crate::proto::ConstantNode { value: Some(i) })
             }
         }
     }
@@ -198,17 +197,21 @@ pub fn serialize_witnesscalc_graph<T: Write>(
 
 fn read_message_length<R: Read>(rw: &mut WriteBackReader<R>) -> std::io::Result<usize> {
     let mut buf = [0u8; MAX_VARINT_LENGTH];
-    rw.read(&mut buf)?;
-
-    let n = prost::decode_length_delimiter(buf.as_ref())?;
-
-    let lnln = prost::length_delimiter_len(n);
-
-    if lnln < buf.len() {
-        rw.write(&buf[lnln..])?;
+    let bytes_read = rw.read(&mut buf)?;
+    if bytes_read == 0 {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::UnexpectedEof, "Unexpected EOF"));
     }
 
-    Ok(n)
+    let len_delimiter = prost::decode_length_delimiter(buf.as_ref())?;
+
+    let lnln = prost::length_delimiter_len(len_delimiter);
+
+    if lnln < bytes_read {
+        rw.write_all(&buf[lnln..bytes_read])?;
+    }
+
+    Ok(len_delimiter)
 }
 
 fn read_message<R: Read, M: Message + std::default::Default>(
@@ -286,7 +289,7 @@ impl<R: Read> WriteBackReader<R> {
 impl<R: Read> Read for WriteBackReader<R> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         if buf.is_empty() {
-            return Ok(0);
+            return Ok(0)
         }
 
         let mut n = 0usize;
@@ -329,11 +332,11 @@ impl<R: Read> Write for WriteBackReader<R> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::graph::{Operation, TresOperation, UnoOperation};
-    use byteorder::ByteOrder;
-    use core::str::FromStr;
     use std::collections::HashMap;
+    use crate::graph::{Operation, TresOperation, UnoOperation};
+    use core::str::FromStr;
+    use byteorder::ByteOrder;
+    use super::*;
 
     #[test]
     fn test_read_message() {

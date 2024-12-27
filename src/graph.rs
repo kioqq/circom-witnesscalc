@@ -289,6 +289,7 @@ pub enum Node {
 }
 
 // TODO remove pub from Vec<Node>
+#[derive(Default)]
 pub struct Nodes(pub Vec<Node>);
 
 impl Nodes {
@@ -300,7 +301,10 @@ impl Nodes {
         let me = self.0.get(idx.0).ok_or(NodeConstErr::EmptyNode(idx))?;
         match me {
             Node::Constant(v) => Ok(*v),
-            Node::UnoOp(op, a) => Ok(op.eval(self.to_const(NodeIdx(*a))?)),
+            Node::UnoOp(op, a) => {
+                Ok(op.eval(
+                    self.to_const(NodeIdx(*a))?))
+            }
             Node::Op(op, a, b) => {
                 Ok(op.eval(self.to_const(NodeIdx(*a))?, self.to_const(NodeIdx(*b))?))
             }
